@@ -145,11 +145,21 @@ async function sync() {
     const output = `---\n${lines.join('\n')}\n---\n\n${body.trimStart()}`
     await writeFile(join(outputDir, filename), output, 'utf8')
 
+    // 改 title 换 slug、改 publishDate 换日期前缀，两种都会产生新文件名。
+    // 不清理旧文件的话，站点里会出现两篇重复文章。
+    const previousEntry = previous.entries?.[vaultPath]
+    if (previousEntry && previousEntry.filename !== filename) {
+      const stale = join(outputDir, previousEntry.filename)
+      if (existsSync(stale)) await rm(stale)
+      removed.push(previousEntry.slug)
+    }
+
     manifest.entries[vaultPath] = { slug, filename }
     published.push(vaultPath)
     slugs[vaultPath] = slug
   }
 
+  // 上次同步过、这次不在了的（删除或取消发布），从 _posts/ 删掉。
   for (const [vaultPath, entry] of Object.entries(previous.entries ?? {})) {
     if (manifest.entries[vaultPath]) continue
     const stale = join(outputDir, entry.filename)

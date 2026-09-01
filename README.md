@@ -1,19 +1,49 @@
 # Obsidian Blog Publisher
 
-从 Obsidian 预览和发布静态博客的通用插件。支持 Astro、Hugo、Hexo、Jekyll 等任意框架。
+在 Obsidian 里驱动你**已有**的静态博客仓库：跑它的构建脚本、预览、发布，
+并且在你删掉文章或改了 slug 之后，把站点里的旧文件一起清理干净。
 
 <p align="center">
   <img src="https://img.shields.io/badge/Obsidian-1.5.0+-purple?logo=obsidian" alt="Obsidian">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
 </p>
 
+## 这个插件解决什么
+
+大多数 Obsidian 发布类插件是「导出器」：把笔记转成 Markdown 推到仓库，构建交给你。
+它们通常有两个共同的缺口——
+
+**删除不会同步。** 你在 vault 里删掉一篇文章，或者改了它的 slug，
+站点仓库里的旧文件会留在原地，得手动去删。
+
+**构建过程是黑盒。** 你在 Obsidian 里点了发布，然后切到终端看构建到底成没成。
+
+这个插件反过来做：不替你实现转换逻辑，而是驱动**你自己的**同步脚本，
+用一份 manifest 记录每次同步产出了什么，下次同步时把不该留的文件删掉。
+构建日志实时显示在 Obsidian 里，退出码非 0 就中断并告诉你哪一步失败。
+
+如果你想要的是「点一下就有网站」，[Digital Garden](https://github.com/oleeskild/obsidian-digital-garden)
+更合适。这个插件的前提是你已经有一个能跑的博客仓库。
+
 ## 特性
 
-✅ **实时预览** — 在 Obsidian 里启动博客开发服务器  
-✅ **内联操作** — 切换发布/草稿状态、复制博客地址、跳转文件  
-✅ **灵活配置** — 支持自定义构建命令和运行时  
-✅ **文章状态可视化** — 按状态分组显示所有文章  
-✅ **框架无关** — 只要能输出约定的 JSON，就能集成
+- **删除同步清理** — manifest 驱动，文章下线或改 slug 后自动清理站点里的旧文件和附件
+- **实时预览** — 在 Obsidian 里启动开发服务器，日志分类显示，端口自动探测
+- **命令全可配** — install / sync / build / publish / 开发预览 / 生产预览，六个都能改
+- **多运行时** — Bun / npm / pnpm / yarn，或任意可执行文件路径（Ruby、Go…）
+- **可插拔校验** — 指向一个导出 `collectArticleIssues` 的 JS 文件，留空则只检查 `publish`
+- **状态分组** — 文章按「可发布 / 草稿 / 需检查 / 未同步」显示，可内联切换
+
+## 插件会改动 vault 里的什么
+
+只有 frontmatter，只有这些字段，只在你主动操作时：
+
+| 字段 | 何时写入 | 说明 |
+|------|----------|------|
+| `publish` | 你点「发布」/「取消发布」 | `true` 才会同步到站点 |
+| `draft` | 你点「转为草稿」/「转为正式」 | 开发预览可见，生产构建隐藏 |
+
+笔记正文永远不会被修改。slug 由同步脚本计算，写在站点仓库里，不回写 vault。
 
 ## 安装
 
@@ -25,7 +55,8 @@
 
 ### 社区插件市场
 
-待提交审核后可用。
+暂无计划提交。这是个前提较强的工具（需要你已有博客仓库并会改构建脚本），
+市场里的 `blog-publisher` id 也已被占用。手动安装或 [BRAT](https://github.com/TfTHacker/obsidian42-brat) 即可。
 
 ## 快速开始
 
@@ -65,6 +96,10 @@
 - [Hugo 示例](examples/hugo/) — Node 标准库，零第三方依赖
 - [Hexo 示例](examples/hexo/) — 串联 Hexo 自己的 generate/deploy
 - [Jekyll 示例](examples/jekyll/) — 同步脚本用 Node，构建交给 bundle
+
+四份示例都实现了 manifest 清理：改 `title`（slug 变了）或取消发布之后，
+站点里的旧文件会在下次同步时删掉。Jekyll 还会处理改 `publishDate` 导致的
+文件名日期前缀变化。Astro 示例额外清理文章附带的图片附件。
 
 ## 配置说明
 

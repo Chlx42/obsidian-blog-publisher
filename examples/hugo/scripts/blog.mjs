@@ -135,12 +135,20 @@ async function sync() {
     const output = `---\n${lines.join('\n')}\n---\n\n${body.trimStart()}`
     await writeFile(join(outputDir, `${slug}.md`), output, 'utf8')
 
+    // 改了 title 就会换 slug，旧文件不清理会让站点里出现两篇重复文章。
+    const previousEntry = previous.entries?.[vaultPath]
+    if (previousEntry && previousEntry.slug !== slug) {
+      const stale = join(outputDir, `${previousEntry.slug}.md`)
+      if (existsSync(stale)) await rm(stale)
+      removed.push(previousEntry.slug)
+    }
+
     manifest.entries[vaultPath] = { slug }
     published.push(vaultPath)
     slugs[vaultPath] = slug
   }
 
-  // 上次同步过、这次不在了的，从 content/ 删掉。
+  // 上次同步过、这次不在了的（删除或取消发布），从 content/ 删掉。
   for (const [vaultPath, entry] of Object.entries(previous.entries ?? {})) {
     if (manifest.entries[vaultPath]) continue
     const stale = join(outputDir, `${entry.slug}.md`)
