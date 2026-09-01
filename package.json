@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "check": "tsc --noEmit",
-    "test": "bun test src"
+    "test": "bun test src",
+    "install:plugin": "bun run install.ts"
   },
   "keywords": ["obsidian", "plugin", "blog", "astro", "hugo", "hexo", "jekyll"],
   "author": "Chlx",

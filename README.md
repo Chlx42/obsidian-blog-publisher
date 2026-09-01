@@ -111,7 +111,16 @@
 指向一个导出 `collectArticleIssues` 的 JS 文件，用于自定义 frontmatter 校验。
 留空则只检查 `publish` 字段。
 
-参考实现：[src/validators/astro.ts](src/validators/astro.ts)
+插件自带一份 Astro 规则，构建后位于插件目录的 `validators/astro.js`，
+校验 `title`、`description`、`publishDate`、`tags`、`draft`、`heroImage`。
+要启用就把这个路径填进设置：
+
+```
+<vault>/.obsidian/plugins/blog-publisher/validators/astro.js
+```
+
+源码见 [src/validators/astro.ts](src/validators/astro.ts)，可复制改成自己的规则。
+校验器通过 `require()` 加载，所以必须是 CommonJS 的 `.js`；加载失败时插件静默降级为不校验。
 
 ## 输出协议
 
@@ -129,8 +138,17 @@ __BLOG_RESULT__{"initialized":[],"published":["post1.md"],"removed":[],"slugs":{
 bun install
 bun run check     # 类型检查
 bun test          # 单元测试
-bun run build     # 构建插件
+bun run build     # 构建插件（生成 main.js 和 validators/astro.js）
 ```
+
+构建后可以直接装进 vault 迭代：
+
+```bash
+BLOG_VAULT_ROOT=/path/to/vault bun run install:plugin
+```
+
+脚本会复制产物、启用插件，并保留 `data.json` 里已有的配置。
+可选的 `BLOG_REPOSITORY` 和 `BLOG_ARTICLES_FOLDER` 只在对应字段为空时才填入。
 
 构建产物在根目录：`main.js`、`manifest.json`、`styles.css`。
 

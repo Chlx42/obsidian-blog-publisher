@@ -1,9 +1,12 @@
 node_modules/
 *.log
 .DS_Store
-main.js
 *.tsbuildinfo
 dist/
+
+# 构建产物
+main.js
+validators/
 
 # 示例项目的同步产物
 .blog-config.json
