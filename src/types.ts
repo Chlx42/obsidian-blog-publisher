@@ -117,6 +117,75 @@ export const DEFAULT_COMMANDS: CommandSet = {
   prodPreview: ['run', 'preview', '--host', '<host>', '--port', '<port>']
 }
 
+export type FrameworkId = 'astro' | 'hugo' | 'hexo' | 'jekyll'
+
+export interface FrameworkPreset {
+  id: FrameworkId
+  label: string
+  /** 命中任一标志文件即认定是这个框架，顺序决定优先级。 */
+  markers: string[]
+  commands: CommandSet
+  /** 站点仓库里放文章的目录，仅用于设置页提示。 */
+  contentHint: string
+}
+
+/**
+ * 四个预设覆盖常见静态博客。sync/build/publish 一律走仓库自己的 scripts，
+ * 因为删除同步需要 manifest，那是仓库脚本的职责，插件只负责调用。
+ */
+export const FRAMEWORK_PRESETS: FrameworkPreset[] = [
+  {
+    id: 'astro',
+    label: 'Astro',
+    markers: ['astro.config.ts', 'astro.config.mjs', 'astro.config.js'],
+    commands: DEFAULT_COMMANDS,
+    contentHint: 'src/content/blog/'
+  },
+  {
+    id: 'hugo',
+    label: 'Hugo',
+    markers: ['hugo.toml', 'hugo.yaml', 'config.toml'],
+    commands: {
+      install: ['install'],
+      sync: ['run', 'blog', '--json'],
+      build: ['run', 'blog:build', '--json'],
+      publish: ['run', 'blog:publish', '--json'],
+      devPreview: ['run', 'dev', '--', '--bind', '<host>', '--port', '<port>'],
+      prodPreview: ['run', 'preview', '--', '--bind', '<host>', '--port', '<port>']
+    },
+    contentHint: 'content/posts/'
+  },
+  {
+    // Jekyll 也用 _config.yml，靠 Hexo 专属的 scaffolds/ 区分，避免误判。
+    id: 'hexo',
+    label: 'Hexo',
+    markers: ['scaffolds', 'db.json'],
+    commands: {
+      install: ['install'],
+      sync: ['run', 'blog', '--json'],
+      build: ['run', 'blog:build', '--json'],
+      publish: ['run', 'blog:publish', '--json'],
+      devPreview: ['run', 'dev', '--', '--port', '<port>'],
+      prodPreview: ['run', 'preview', '--', '--port', '<port>']
+    },
+    contentHint: 'source/_posts/'
+  },
+  {
+    id: 'jekyll',
+    label: 'Jekyll',
+    markers: ['Gemfile', '_config.yml'],
+    commands: {
+      install: ['install'],
+      sync: ['run', 'blog', '--json'],
+      build: ['run', 'blog:build', '--json'],
+      publish: ['run', 'blog:publish', '--json'],
+      devPreview: ['run', 'dev', '--', '--host', '<host>', '--port', '<port>'],
+      prodPreview: ['run', 'preview', '--', '--host', '<host>', '--port', '<port>']
+    },
+    contentHint: '_posts/'
+  }
+]
+
 export const DEFAULT_SETTINGS: BlogPublisherSettings = {
   blogRepository: '',
   articlesFolder: '',

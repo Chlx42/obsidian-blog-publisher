@@ -139,3 +139,17 @@
   background: var(--background-modifier-hover);
   border-color: var(--text-muted);
 }
+
+.blog-publisher-validator-status {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.blog-publisher-validator-status.is-error {
+  background: var(--background-modifier-error);
+  color: var(--text-error);
+  border: 1px solid var(--background-modifier-error-hover);
+}

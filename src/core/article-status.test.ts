@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
 
-import { inspectArticle, loadValidator, type Validator } from './article-status'
+import {
+  inspectArticle,
+  loadValidator,
+  loadValidatorResult,
+  type Validator
+} from './article-status'
 
 const validArticle = {
   publish: true,
@@ -60,5 +66,31 @@ describe('loadValidator', () => {
 
   test('路径加载失败时降级为 null 而不是抛错', async () => {
     expect(await loadValidator('/nonexistent/validator.js')).toBeNull()
+  })
+})
+
+describe('loadValidatorResult', () => {
+  test('路径留空时不算错误', () => {
+    expect(loadValidatorResult('')).toEqual({ validator: null, error: null })
+    expect(loadValidatorResult('   ')).toEqual({ validator: null, error: null })
+  })
+
+  test('文件不存在时回报原因', () => {
+    const result = loadValidatorResult('/nonexistent/validator.js')
+    expect(result.validator).toBeNull()
+    expect(result.error).toBe('找不到这个文件')
+  })
+
+  test('文件没导出函数时回报原因', () => {
+    const result = loadValidatorResult(join(import.meta.dir, 'article-status.ts'))
+    expect(result.validator).toBeNull()
+    expect(result.error).toBe('文件没有导出 collectArticleIssues 函数')
+  })
+
+  test('导出 collectArticleIssues 时加载成功', () => {
+    const result = loadValidatorResult(join(import.meta.dir, '../validators/astro.ts'))
+    expect(result.error).toBeNull()
+    expect(typeof result.validator).toBe('function')
+    expect(result.validator?.({ publish: true })).not.toHaveLength(0)
   })
 })

@@ -8,6 +8,13 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
 </p>
 
+<!-- 截图待补，要点见 docs/README.md。把图放进 docs/ 后取消下面的注释。
+<p align="center">
+  <img src="docs/screenshot-panel.png" width="720"
+       alt="博客面板：文章按状态分组，右侧是实时日志">
+</p>
+-->
+
 ## 这个插件解决什么
 
 大多数 Obsidian 发布类插件是「导出器」：把笔记转成 Markdown 推到仓库，构建交给你。
@@ -155,7 +162,9 @@
 ```
 
 源码见 [src/validators/astro.ts](src/validators/astro.ts)，可复制改成自己的规则。
-校验器通过 `require()` 加载，所以必须是 CommonJS 的 `.js`；加载失败时插件静默降级为不校验。
+校验器通过 `require()` 加载，所以必须是 CommonJS 的 `.js`。加载失败时插件降级为只检查
+`publish` 字段，并在设置里这一项下面显示原因（找不到文件、没导出函数等）——路径填错的话，
+所有文章都会显示「可发布」，所以别忽略那行提示。
 
 ## 输出协议
 
@@ -172,9 +181,12 @@ __BLOG_RESULT__{"initialized":[],"published":["post1.md"],"removed":[],"slugs":{
 ```bash
 bun install
 bun run check     # 类型检查
-bun test          # 单元测试
+bun run test      # 单元测试（限定 src/，见下）
 bun run build     # 构建插件（生成 main.js 和 validators/astro.js）
 ```
+
+`test` 脚本是 `bun test src` 而不是 `bun test`：`examples/` 里的脚本各自依赖对应框架的
+运行时，在这个仓库里装不全。给示例加测试的话，请单独跑，别指望根目录的 `test` 会带上它们。
 
 构建后可以直接装进 vault 迭代：
 

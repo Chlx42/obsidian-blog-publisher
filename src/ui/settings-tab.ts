@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, type Plugin } from 'obsidian'
 
+import { loadValidatorResult } from '../core/article-status'
 import { DEFAULT_COMMANDS, type BlogPublisherSettings, type RuntimeType } from '../types'
 
 /** 插件主类需要暴露给设置页的部分，避免设置页依赖整个插件类型。 */
@@ -190,17 +191,35 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
       )
 
     // 高级：文章校验
-    new Setting(containerEl)
+    const validatorSetting = new Setting(containerEl)
       .setName('文章校验器')
       .setDesc('可选。指向导出 collectArticleIssues 的 JS 文件，留空则只检查 publish 字段')
-      .addText((text) =>
-        text
-          .setPlaceholder('/path/to/validator.js')
-          .setValue(this.host.settings.customValidatorPath)
-          .onChange(async (value) => {
-            this.host.settings.customValidatorPath = value.trim()
-            await this.host.saveSettings()
-          })
-      )
+
+    // 路径填错时校验会静默跳过，所有文章都显示「可发布」。把失败原因摆出来。
+    const validatorStatus = containerEl.createDiv({ cls: 'blog-publisher-validator-status' })
+    const renderValidatorStatus = () => {
+      const { error } = loadValidatorResult(this.host.settings.customValidatorPath)
+      const configured = this.host.settings.customValidatorPath.trim().length > 0
+      validatorStatus.empty()
+      if (error) {
+        validatorStatus.addClass('is-error')
+        validatorStatus.setText(`校验器未生效：${error}。当前只检查 publish 字段。`)
+      } else if (configured) {
+        validatorStatus.removeClass('is-error')
+        validatorStatus.setText('校验器已加载。')
+      }
+    }
+
+    validatorSetting.addText((text) =>
+      text
+        .setPlaceholder('/path/to/validator.js')
+        .setValue(this.host.settings.customValidatorPath)
+        .onChange(async (value) => {
+          this.host.settings.customValidatorPath = value.trim()
+          await this.host.saveSettings()
+          renderValidatorStatus()
+        })
+    )
+    renderValidatorStatus()
   }
 }

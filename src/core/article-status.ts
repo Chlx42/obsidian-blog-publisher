@@ -2,17 +2,44 @@ import type { ArticleStatus } from '../types'
 
 export type Validator = (frontmatter: Record<string, unknown>) => string[]
 
-/** 动态加载用户的校验函数，失败时返回 null（降级为不校验）。 */
-export async function loadValidator(path: string): Promise<Validator | null> {
-  if (!path.trim()) return null
+export interface ValidatorLoadResult {
+  validator: Validator | null
+  /** 加载失败的原因，成功或未配置时为 null。用于在设置页显示。 */
+  error: string | null
+}
+
+/**
+ * 加载校验器并回报失败原因。
+ *
+ * 运行时降级为不校验，但原因必须能显示出来：路径填错时插件会把所有文章都判成
+ * 「可发布」，静默失败的表现和一切正常一样，用户没法自己发现。
+ */
+export function loadValidatorResult(path: string): ValidatorLoadResult {
+  const trimmed = path.trim()
+  if (!trimmed) return { validator: null, error: null }
+
+  let module: unknown
   try {
     // Obsidian 环境下用 require 而非 import（esbuild 打包后是 CommonJS）
-    const module = require(path)
-    const fn = module.collectArticleIssues ?? module.default
-    return typeof fn === 'function' ? fn : null
-  } catch {
-    return null
+    module = require(trimmed)
+  } catch (error) {
+    const reason = (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
+      ? '找不到这个文件'
+      : `加载出错：${(error as Error).message}`
+    return { validator: null, error: reason }
   }
+
+  const exported = module as Record<string, unknown>
+  const fn = exported?.collectArticleIssues ?? exported?.default
+  if (typeof fn !== 'function') {
+    return { validator: null, error: '文件没有导出 collectArticleIssues 函数' }
+  }
+  return { validator: fn as Validator, error: null }
+}
+
+/** 动态加载用户的校验函数，失败时返回 null（降级为不校验）。 */
+export async function loadValidator(path: string): Promise<Validator | null> {
+  return loadValidatorResult(path).validator
 }
 
 export function inspectArticle(
