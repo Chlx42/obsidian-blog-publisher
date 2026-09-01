@@ -153,3 +153,20 @@
   color: var(--text-error);
   border: 1px solid var(--background-modifier-error-hover);
 }
+
+.blog-publisher-advanced {
+  margin-top: 18px;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 6px;
+}
+
+.blog-publisher-advanced > summary {
+  cursor: pointer;
+  padding: 6px 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.blog-publisher-advanced > summary:hover {
+  color: var(--text-normal);
+}
