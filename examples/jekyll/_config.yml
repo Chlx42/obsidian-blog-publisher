@@ -1,0 +1,16 @@
+# Jekyll 最小配置
+title: My Blog
+url: https://example.com
+
+# 同步脚本写入 _posts/，文件名已带日期前缀
+permalink: /:year/:month/:day/:title/
+
+# Obsidian 笔记里可能有插件生成的 HTML 片段
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag

@@ -1,0 +1,206 @@
+import { App, PluginSettingTab, Setting, type Plugin } from 'obsidian'
+
+import { DEFAULT_COMMANDS, type BlogPublisherSettings, type RuntimeType } from '../types'
+
+/** 插件主类需要暴露给设置页的部分，避免设置页依赖整个插件类型。 */
+export interface SettingsHost extends Plugin {
+  settings: BlogPublisherSettings
+  saveSettings(): Promise<void>
+  detectedRuntimePath(): string | null
+  articleCount(): number
+}
+
+export class BlogPublisherSettingTab extends PluginSettingTab {
+  constructor(
+    app: App,
+    private host: SettingsHost
+  ) {
+    super(app, host)
+  }
+
+  display() {
+    const { containerEl } = this
+    containerEl.empty()
+    new Setting(containerEl).setName('Blog Publisher').setHeading()
+
+    // 基础配置
+    new Setting(containerEl)
+      .setName('博客仓库路径')
+      .setDesc('包含 package.json 的本地目录')
+      .addText((text) =>
+        text
+          .setPlaceholder('/path/to/blog')
+          .setValue(this.host.settings.blogRepository)
+          .onChange(async (value) => {
+            this.host.settings.blogRepository = value.trim()
+            await this.host.saveSettings()
+          })
+      )
+
+    new Setting(containerEl)
+      .setName('文章文件夹')
+      .setDesc(`相对于当前 Vault 的博客笔记目录，当前识别到 ${this.host.articleCount()} 篇`)
+      .addText((text) =>
+        text.setValue(this.host.settings.articlesFolder).onChange(async (value) => {
+          this.host.settings.articlesFolder = value.trim().replace(/^\/+|\/+$/g, '')
+          await this.host.saveSettings()
+          this.display()
+        })
+      )
+
+    new Setting(containerEl).setName('预览端口').addText((text) =>
+      text.setValue(String(this.host.settings.previewPort)).onChange(async (value) => {
+        const port = Number(value)
+        if (Number.isInteger(port) && port > 0 && port <= 65_535) {
+          this.host.settings.previewPort = port
+          await this.host.saveSettings()
+        }
+      })
+    )
+
+    new Setting(containerEl)
+      .setName('预览模式')
+      .setDesc('开发预览显示草稿并支持自动刷新；生产预览与线上构建一致')
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption('development', '开发预览')
+          .addOption('production', '生产预览')
+          .setValue(this.host.settings.previewMode)
+          .onChange(async (value) => {
+            if (value !== 'development' && value !== 'production') return
+            this.host.settings.previewMode = value
+            await this.host.saveSettings()
+          })
+      )
+
+    new Setting(containerEl)
+      .setName('保存后自动同步')
+      .setDesc('仅在开发预览运行时生效')
+      .addToggle((toggle) =>
+        toggle.setValue(this.host.settings.autoSyncOnSave).onChange(async (value) => {
+          this.host.settings.autoSyncOnSave = value
+          await this.host.saveSettings()
+        })
+      )
+
+    new Setting(containerEl)
+      .setName('博客地址')
+      .setDesc('用于「复制博客地址」功能')
+      .addText((text) =>
+        text
+          .setPlaceholder('https://example.com')
+          .setValue(this.host.settings.siteUrl)
+          .onChange(async (value) => {
+            this.host.settings.siteUrl = value.trim()
+            await this.host.saveSettings()
+          })
+      )
+
+    // 运行时配置
+    new Setting(containerEl).setName('运行时').setHeading()
+
+    const detectedRuntime = this.host.detectedRuntimePath()
+    new Setting(containerEl)
+      .setName('包管理器')
+      .setDesc(
+        detectedRuntime
+          ? `自动探测到：${detectedRuntime}`
+          : '未探测到，请手动选择或填写自定义路径'
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption('bun', 'Bun')
+          .addOption('npm', 'npm')
+          .addOption('pnpm', 'pnpm')
+          .addOption('yarn', 'Yarn')
+          .addOption('custom', '自定义路径')
+          .setValue(this.host.settings.runtime)
+          .onChange(async (value) => {
+            this.host.settings.runtime = value as RuntimeType
+            await this.host.saveSettings()
+            this.display()
+          })
+      )
+
+    if (this.host.settings.runtime === 'custom') {
+      new Setting(containerEl)
+        .setName('可执行文件路径')
+        .setDesc('完整的运行时路径（如 /usr/local/bin/node）')
+        .addText((text) =>
+          text
+            .setPlaceholder('/usr/local/bin/bun')
+            .setValue(this.host.settings.customRuntimePath)
+            .onChange(async (value) => {
+              this.host.settings.customRuntimePath = value.trim()
+              await this.host.saveSettings()
+            })
+        )
+    }
+
+    // 高级：命令配置
+    new Setting(containerEl).setName('命令配置').setHeading()
+    new Setting(containerEl).setDesc(
+      '用空格分隔参数。<port> 和 <host> 会被替换为实际值。留空则使用默认命令。'
+    )
+
+    const commandLabels: Record<keyof typeof DEFAULT_COMMANDS, string> = {
+      install: '安装依赖',
+      sync: '同步文章',
+      build: '构建博客',
+      publish: '发布博客',
+      devPreview: '开发预览',
+      prodPreview: '生产预览'
+    }
+
+    for (const key of Object.keys(DEFAULT_COMMANDS) as Array<keyof typeof DEFAULT_COMMANDS>) {
+      new Setting(containerEl).setName(commandLabels[key]).addText((text) =>
+        text
+          .setPlaceholder(DEFAULT_COMMANDS[key].join(' '))
+          .setValue(this.host.settings.commands[key].join(' '))
+          .onChange(async (value) => {
+            this.host.settings.commands[key] = value.trim().split(/\s+/).filter(Boolean)
+            await this.host.saveSettings()
+          })
+      )
+    }
+
+    new Setting(containerEl)
+      .setName('恢复默认命令')
+      .setDesc('把命令配置重置为 Astro + Bun 预设')
+      .addButton((button) =>
+        button.setButtonText('重置').onClick(async () => {
+          this.host.settings.commands = { ...DEFAULT_COMMANDS }
+          await this.host.saveSettings()
+          this.display()
+        })
+      )
+
+    // 高级：结果解析
+    new Setting(containerEl)
+      .setName('结果行前缀')
+      .setDesc('构建脚本输出结构化结果时使用的前缀，留空则不解析')
+      .addText((text) =>
+        text
+          .setPlaceholder('__BLOG_RESULT__')
+          .setValue(this.host.settings.resultLinePrefix)
+          .onChange(async (value) => {
+            this.host.settings.resultLinePrefix = value.trim()
+            await this.host.saveSettings()
+          })
+      )
+
+    // 高级：文章校验
+    new Setting(containerEl)
+      .setName('文章校验器')
+      .setDesc('可选。指向导出 collectArticleIssues 的 JS 文件，留空则只检查 publish 字段')
+      .addText((text) =>
+        text
+          .setPlaceholder('/path/to/validator.js')
+          .setValue(this.host.settings.customValidatorPath)
+          .onChange(async (value) => {
+            this.host.settings.customValidatorPath = value.trim()
+            await this.host.saveSettings()
+          })
+      )
+  }
+}

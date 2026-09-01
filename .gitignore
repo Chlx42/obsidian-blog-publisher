@@ -1,0 +1,14 @@
+node_modules/
+*.log
+.DS_Store
+main.js
+*.tsbuildinfo
+dist/
+
+# 示例项目的同步产物
+.blog-config.json
+.blog-sync-manifest.json
+examples/*/content/
+examples/*/source/
+examples/*/_posts/
+examples/*/public/

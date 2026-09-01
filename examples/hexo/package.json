@@ -1,0 +1,13 @@
+{
+  "name": "hexo-blog-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "blog": "node scripts/blog.mjs sync",
+    "blog:build": "npm run blog && hexo generate",
+    "blog:publish": "npm run blog && hexo generate && hexo deploy",
+    "server": "hexo server",
+    "preview": "hexo server"
+  }
+}

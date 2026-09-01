@@ -1,0 +1,10 @@
+{
+  "id": "blog-publisher",
+  "name": "Blog Publisher",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Preview and publish static blogs (Astro, Hugo, Hexo, Jekyll) from Obsidian with inline actions and real-time logs.",
+  "author": "Chlx",
+  "authorUrl": "https://github.com/Chlx42",
+  "isDesktopOnly": true
+}

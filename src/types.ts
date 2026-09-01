@@ -1,0 +1,135 @@
+export type BlogRunnerState =
+  | 'idle'
+  | 'installing'
+  | 'syncing'
+  | 'building'
+  | 'starting-preview'
+  | 'previewing'
+  | 'stopping-preview'
+  | 'publishing'
+
+/** 面板、状态栏、日志弹窗三处共用，所以放在类型层而不是某个 UI 文件里。 */
+export const STATE_LABELS: Record<BlogRunnerState, string> = {
+  idle: '博客：就绪',
+  installing: '博客：安装依赖中',
+  syncing: '博客预览：同步中',
+  building: '博客：构建中',
+  'starting-preview': '博客预览：启动中',
+  previewing: '博客预览：运行中',
+  'stopping-preview': '博客预览：停止中',
+  publishing: '博客：发布中'
+}
+
+/** 任务进行中，此时不接受新任务。 */
+export function isBusy(state: BlogRunnerState): boolean {
+  return state !== 'idle' && state !== 'previewing'
+}
+
+export type RuntimeType = 'bun' | 'npm' | 'pnpm' | 'yarn' | 'custom'
+
+export interface CommandSet {
+  install: string[]
+  sync: string[]
+  build: string[]
+  publish: string[]
+  devPreview: string[]
+  prodPreview: string[]
+}
+
+export interface BlogPublisherSettings {
+  blogRepository: string
+  articlesFolder: string
+  previewPort: number
+  previewMode: 'development' | 'production'
+  autoSyncOnSave: boolean
+  siteUrl: string
+  runtime: RuntimeType
+  customRuntimePath: string
+  commands: CommandSet
+  resultLinePrefix: string
+  customValidatorPath: string
+}
+
+export type LogLevel = 'info' | 'error'
+
+export interface LogEntry {
+  text: string
+  level: LogLevel
+  /** 产生这行日志时所处的阶段，用于在日志弹窗里分组。 */
+  stage: BlogRunnerState
+}
+
+/** 发布器 --json 输出的同步结果。 */
+export interface SyncSummary {
+  initialized: string[]
+  published: string[]
+  removed: string[]
+  slugs: Record<string, string>
+}
+
+export type ArticleStatusCode = 'uninitialized' | 'not-published' | 'invalid' | 'draft' | 'ready'
+
+export interface ArticleStatus {
+  code: ArticleStatusCode
+  label: string
+  issues: string[]
+}
+
+/** 从 vault 读出来的一篇笔记，只保留分组需要的字段，不含 Obsidian 对象。 */
+export interface VaultNote {
+  path: string
+  basename: string
+  frontmatter?: Record<string, unknown>
+}
+
+export interface ArticleEntry extends VaultNote {
+  title: string
+  status: ArticleStatus
+}
+
+export interface ArticleGroup {
+  code: ArticleStatusCode
+  label: string
+  items: ArticleEntry[]
+}
+
+export interface ArticleIndex {
+  groups: ArticleGroup[]
+  counts: Record<ArticleStatusCode, number>
+  total: number
+}
+
+export interface BlogState {
+  task: BlogRunnerState
+  logs: LogEntry[]
+  lastResult: SyncSummary | null
+  articles: ArticleIndex | null
+  previewUrl: string | null
+}
+
+/** Astro + Bun 预设，保持现有行为。 */
+export const DEFAULT_COMMANDS: CommandSet = {
+  install: ['install', '--frozen-lockfile'],
+  sync: ['run', 'blog', '--json'],
+  build: ['run', 'blog:build', '--json'],
+  publish: ['run', 'blog:publish', '--json'],
+  devPreview: ['run', 'dev', '--host', '<host>', '--port', '<port>'],
+  prodPreview: ['run', 'preview', '--host', '<host>', '--port', '<port>']
+}
+
+export const DEFAULT_SETTINGS: BlogPublisherSettings = {
+  blogRepository: '',
+  articlesFolder: '',
+  previewPort: 4173,
+  previewMode: 'development',
+  autoSyncOnSave: true,
+  siteUrl: '',
+  runtime: 'bun',
+  customRuntimePath: '',
+  commands: { ...DEFAULT_COMMANDS },
+  resultLinePrefix: '__BLOG_RESULT__',
+  customValidatorPath: ''
+}
+
+/** 发布器结构化结果行的前缀，stdout 里混着构建输出，靠它挑出结果行。 */
+export const RESULT_LINE_PREFIX = '__BLOG_RESULT__'

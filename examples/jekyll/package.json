@@ -1,0 +1,13 @@
+{
+  "name": "jekyll-blog-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "blog": "node scripts/blog.mjs sync",
+    "blog:build": "node scripts/blog.mjs build",
+    "blog:publish": "node scripts/blog.mjs publish",
+    "dev": "bundle exec jekyll serve --unpublished",
+    "preview": "bundle exec jekyll serve"
+  }
+}

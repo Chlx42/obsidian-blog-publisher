@@ -1,0 +1,12 @@
+# Hexo 最小配置，只保留与同步脚本相关的部分
+title: My Blog
+url: https://example.com
+
+# 同步脚本写入 source/_posts/，slug 来自 frontmatter
+permalink: :title/
+new_post_name: :title.md
+
+deploy:
+  type: git
+  repo: git@github.com:you/you.github.io.git
+  branch: gh-pages
