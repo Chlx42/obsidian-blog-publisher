@@ -8,6 +8,7 @@ import { BlogLogModal } from './ui/log-modal'
 import { BLOG_PANEL_VIEW_TYPE, BlogPanelView } from './ui/panel'
 import { BlogPublisherSettingTab } from './ui/settings-tab'
 import { StatusBar } from './ui/status-bar'
+import { SummaryModal } from './ui/summary-modal'
 import {
   DEFAULT_COMMANDS,
   DEFAULT_SETTINGS,
@@ -181,7 +182,19 @@ export default class BlogPublisherPlugin extends Plugin {
     try {
       new Notice('正在构建并发布博客…', 5_000)
       await this.runner.publish()
-      new Notice('博客发布成功')
+
+      // 显示操作摘要
+      const result = this.store.getState().lastResult
+      if (result) {
+        new SummaryModal(
+          this.app,
+          '✅ 发布完成',
+          result,
+          (path) => void this.notes.openPath(path)
+        ).open()
+      } else {
+        new Notice('博客发布成功')
+      }
     } catch (error) {
       this.showError(error)
     }
