@@ -1,0 +1,21 @@
+# Jekyll 示例项目忽略文件
+
+# Jekyll 构建产物
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+
+# Ruby 依赖
+vendor/
+.bundle/
+
+# 本地配置
+.blog-config.json
+
+# Manifest
+.blog-manifest.json
+
+# 系统文件
+.DS_Store
+Thumbs.db

@@ -1,16 +1,31 @@
-# Jekyll 最小配置
-title: My Blog
-url: https://example.com
+title: My Jekyll Blog
+email: your-email@example.com
+description: >-
+  A blog powered by Jekyll
+baseurl: ""
+url: "https://example.com"
+twitter_username: jekyllrb
+github_username:  jekyll
 
-# 同步脚本写入 _posts/，文件名已带日期前缀
-permalink: /:year/:month/:day/:title/
-
-# Obsidian 笔记里可能有插件生成的 HTML 片段
-markdown: kramdown
-kramdown:
-  input: GFM
-  hard_wrap: false
-
+# Build settings
+theme: minima
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
+
+# Exclude from processing
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - scripts/
+  - package.json
+  - .blog-config.json
+  - .blog-manifest.json

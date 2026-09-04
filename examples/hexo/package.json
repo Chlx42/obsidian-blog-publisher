@@ -4,10 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "blog": "node scripts/blog.mjs sync",
-    "blog:build": "npm run blog && hexo generate",
-    "blog:publish": "npm run blog && hexo generate && hexo deploy",
-    "server": "hexo server",
-    "preview": "hexo server"
-  }
+    "blog:sync": "node scripts/sync.mjs sync --json",
+    "blog:build": "node scripts/sync.mjs build --json",
+    "blog:publish": "node scripts/sync.mjs publish --json",
+    "server": "hexo server -p"
+  },
+  "hexo": {
+    "version": "7.0.0"
+  },
+  "dependencies": {
+    "hexo": "^7.0.0",
+    "hexo-generator-archive": "^2.0.0",
+    "hexo-generator-category": "^2.0.0",
+    "hexo-generator-index": "^3.0.0",
+    "hexo-generator-tag": "^2.0.0",
+    "hexo-renderer-marked": "^6.0.0",
+    "hexo-server": "^3.0.0"
+  },
+  "devDependencies": {}
 }

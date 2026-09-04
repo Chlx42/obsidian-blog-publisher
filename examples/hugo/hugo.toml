@@ -1,11 +1,11 @@
 baseURL = 'https://example.com/'
 languageCode = 'zh-cn'
-title = 'My Blog'
+title = 'My Hugo Blog'
 
-# 同步脚本写入 content/posts/，slug 来自 frontmatter
-[permalinks]
-  posts = '/:slug/'
+[params]
+  description = 'A blog powered by Hugo'
 
-# Obsidian 笔记里常有内嵌 HTML，不开 unsafe 会被 Goldmark 吞掉
-[markup.goldmark.renderer]
-  unsafe = true
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
