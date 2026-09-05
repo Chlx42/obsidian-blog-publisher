@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-05
+
 ### Added
 - **一键加入博客** - 状态栏「＋ 加入博客」按钮（或命令「当前笔记加入博客」，
   默认 `Cmd/Ctrl+Shift+I`）把当前笔记加入博客：自动补齐缺失的 frontmatter

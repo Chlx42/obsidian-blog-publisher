@@ -36,6 +36,7 @@ jobs:
               with:
                   subject-path: |
                       main.js
+                      validators/astro.js
                       ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
 
             - name: Create release
@@ -47,4 +48,5 @@ jobs:
                   gh release create "$tag" \
                     --title="$tag" \
                     --draft \
-                    main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
+                    main.js manifest.json validators/astro.js \
+                    ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}

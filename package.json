@@ -1,6 +1,6 @@
 {
   "name": "obsidian-blog-publisher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Preview and publish static blogs from Obsidian",
   "main": "main.js",
   "scripts": {
