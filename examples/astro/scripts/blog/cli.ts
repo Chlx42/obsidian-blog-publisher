@@ -62,12 +62,38 @@ async function run(command: string, args: string[], options?: { stdout?: 'inheri
   return output.trim()
 }
 
+const GIT_RETRY_ATTEMPTS = 3
+const GIT_RETRY_DELAY_MS = 3_000
+
+/**
+ * fetch/push 这类网络操作走代理链路，偶发在握手阶段被掐断
+ * （Connection closed by 198.18.x.x / SSL_ERROR_SYSCALL），隔几秒重试通常就能过。
+ * 只包网络操作，本地 git 命令不重试。
+ */
+async function runGitNetwork(args: string[]): Promise<string> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= GIT_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await run('git', args)
+    } catch (error) {
+      lastError = error
+      if (attempt < GIT_RETRY_ATTEMPTS) {
+        console.warn(
+          `git ${args[0]} 网络抖动，${GIT_RETRY_DELAY_MS / 1000} 秒后自动重试（${attempt}/${GIT_RETRY_ATTEMPTS - 1}）`
+        )
+        await new Promise((resolve) => setTimeout(resolve, GIT_RETRY_DELAY_MS))
+      }
+    }
+  }
+  throw lastError
+}
+
 async function currentBranch(): Promise<string> {
   return run('git', ['branch', '--show-current'], { stdout: 'pipe' })
 }
 
 async function ensurePublishBase(): Promise<void> {
-  await run('git', ['fetch', 'origin', 'main'])
+  await runGitNetwork(['fetch', 'origin', 'main'])
   const ancestorCheck = await Bun.spawn(
     ['git', 'merge-base', '--is-ancestor', 'origin/main', 'HEAD'],
     {
@@ -157,7 +183,7 @@ async function publish(
 
   if (changed === 0) {
     console.log('生成内容没有变化，无需提交。')
-    await run('git', ['push', 'origin', 'main'])
+    await runGitNetwork(['push', 'origin', 'main'])
     pushed = true
     return { result, outcome: { committed, pushed } }
   }
@@ -165,7 +191,7 @@ async function publish(
 
   await run('git', ['commit', '--only', '-m', 'content: sync obsidian blog', '--', ...pathspecs])
   committed = true
-  await run('git', ['push', 'origin', 'main'])
+  await runGitNetwork(['push', 'origin', 'main'])
   pushed = true
   return { result, outcome: { committed, pushed } }
 }

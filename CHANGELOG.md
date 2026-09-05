@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **发布网络重试** - 发布器的 `git fetch` / `git push` 遇到代理链路抖动
+  （`Connection closed by 198.18.x.x`、`SSL_ERROR_SYSCALL`）时自动重试两次，
+  每次间隔 3 秒，不再让一次网络抖动中断整个发布。
+
 ## [1.0.1] - 2026-09-05
 
 ### Added
