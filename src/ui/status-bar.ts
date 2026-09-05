@@ -12,7 +12,9 @@ export class StatusBar {
   constructor(
     private taskEl: HTMLElement,
     private articleEl: HTMLElement,
-    onClick: () => void
+    private joinEl: HTMLElement,
+    onClick: () => void,
+    onJoin: () => void
   ) {
     this.taskEl.addClass('blog-publisher-status')
     this.taskEl.setAttr('aria-label', '打开博客面板')
@@ -21,12 +23,21 @@ export class StatusBar {
     this.articleEl.addClass('blog-publisher-article-status')
     this.articleEl.setAttr('aria-label', '打开博客面板查看当前文章')
     this.articleEl.addEventListener('click', onClick)
+
+    this.joinEl.addClass('blog-publisher-status-join')
+    this.joinEl.setText('+ 加入博客')
+    this.joinEl.setAttr('aria-label', '把当前笔记加入博客：自动补齐 frontmatter')
+    this.joinEl.addEventListener('click', onJoin)
+    this.joinEl.style.display = 'none'
   }
 
-  render(state: BlogState, articleLabel: string | null) {
+  render(state: BlogState, articleLabel: string | null, canJoin: boolean) {
     // 任务状态：根据阶段显示不同图标和计数
     const taskText = this.getTaskStatusText(state)
     this.taskEl.setText(taskText)
+
+    // 当前笔记缺博客字段时给出一个一键入口。
+    this.joinEl.style.display = canJoin ? '' : 'none'
 
     // 文章状态（当前打开的文章）
     if (!articleLabel) {
@@ -37,10 +48,13 @@ export class StatusBar {
     this.articleEl.setText(articleLabel)
   }
 
-  /** 设置里关掉状态栏显示后，两个元素一起隐藏。 */
+  /** 设置里关掉状态栏显示后，所有元素一起隐藏。 */
   setVisible(visible: boolean) {
     this.taskEl.style.display = visible ? '' : 'none'
-    if (!visible) this.articleEl.style.display = 'none'
+    if (!visible) {
+      this.articleEl.style.display = 'none'
+      this.joinEl.style.display = 'none'
+    }
   }
 
   setArticleStatusCode(code: string | null) {

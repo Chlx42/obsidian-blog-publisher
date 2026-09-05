@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **一键加入博客** - 状态栏「＋ 加入博客」按钮（或命令「当前笔记加入博客」，
+  默认 `Cmd/Ctrl+Shift+I`）把当前笔记加入博客：自动补齐缺失的 frontmatter
+  （`publish: true`、`draft: true`、title、description、publishDate、tags），
+  description 取正文第一段作草稿。只补缺失键，已有内容不覆盖；slug 和
+  language 仍由发布器计算。
 - **文章留在原地** - 文章目录之外的笔记只要 frontmatter 标记 `publish: true` 也会被识别，
   进入面板、预览和发布流程，无需移动到博客文件夹。目录外笔记只读取、不回写；
   manifest source key 以 `../` 前缀与目录内路径区分（详见 PROTOCOL.md「同步范围」）。

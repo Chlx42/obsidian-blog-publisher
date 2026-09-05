@@ -10,6 +10,16 @@
   cursor: pointer;
 }
 
+.blog-publisher-status-join {
+  cursor: pointer;
+  color: var(--interactive-accent);
+  font-weight: var(--font-medium);
+}
+
+.blog-publisher-status-join:hover {
+  text-decoration: underline;
+}
+
 .blog-publisher-article-status {
   cursor: pointer;
 }

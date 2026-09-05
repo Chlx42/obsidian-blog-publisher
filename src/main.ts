@@ -2,7 +2,7 @@ import { FileSystemAdapter, Modal, Notice, Plugin, TFile, type App } from 'obsid
 
 import { loadValidator, type Validator } from './core/article-status'
 import { hasPushableWork } from './core/article-index'
-import { buildBlogUrl, toggleDraft, togglePublish } from './core/frontmatter'
+import { buildBlogUrl, initArticleFrontmatter, missingBlogDefaults, toggleDraft, togglePublish } from './core/frontmatter'
 import {
   buildPublishRecord,
   notePathOfSourceKey,
@@ -76,8 +76,12 @@ export default class BlogPublisherPlugin extends Plugin {
       'blog-publisher-ribbon'
     )
 
-    this.statusBar = new StatusBar(this.addStatusBarItem(), this.addStatusBarItem(), () =>
-      void this.openPanel()
+    this.statusBar = new StatusBar(
+      this.addStatusBarItem(),
+      this.addStatusBarItem(),
+      this.addStatusBarItem(),
+      () => void this.openPanel(),
+      () => void this.joinCurrentNote()
     )
     this.register(this.store.subscribe(() => this.renderStatusBar()))
 
@@ -113,6 +117,16 @@ export default class BlogPublisherPlugin extends Plugin {
         if (!checking) new ArticleStatusModal(this.app, article.file, article.entry.status).open()
         return true
       }
+    })
+    this.addCommand({
+      id: 'add-to-blog',
+      name: '当前笔记加入博客：自动补齐 frontmatter',
+      checkCallback: (checking) => {
+        if (!this.canJoinCurrentNote()) return false
+        if (!checking) void this.joinCurrentNote()
+        return true
+      },
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'i' }]
     })
 
     this.registerEvent(this.app.workspace.on('file-open', () => this.refreshArticles()))
@@ -320,8 +334,41 @@ export default class BlogPublisherPlugin extends Plugin {
     this.statusBar.setVisible(this.settings.showStatusBar)
     const liveSources = this.publishRecord?.sources ?? null
     const article = this.notes.currentArticle(liveSources)
-    this.statusBar.render(this.store.getState(), article?.entry.status.label ?? null)
+    this.statusBar.render(
+      this.store.getState(),
+      article?.entry.status.label ?? null,
+      this.canJoinCurrentNote()
+    )
     this.statusBar.setArticleStatusCode(article?.entry.status.code ?? null)
+  }
+
+  /** 当前笔记还缺博客字段时，状态栏才出现「加入博客」按钮，命令也同样用这个判断。 */
+  private canJoinCurrentNote(): boolean {
+    const file = this.app.workspace.getActiveFile()
+    if (!file || file.extension !== 'md') return false
+    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter
+    return (
+      missingBlogDefaults(frontmatter, {
+        basename: file.basename,
+        created: new Date(file.stat.ctime)
+      }) !== null
+    )
+  }
+
+  private async joinCurrentNote() {
+    const file = this.app.workspace.getActiveFile()
+    if (!file) return
+    try {
+      const changed = await initArticleFrontmatter(this.app, file)
+      this.refreshArticles()
+      if (changed) {
+        new Notice('已加入博客，先确认一下 description 再发布', 5_000)
+      } else {
+        new Notice('这篇笔记已经是完整的博客文章')
+      }
+    } catch (error) {
+      this.showError(error)
+    }
   }
 
   private scheduleAutoSync() {
