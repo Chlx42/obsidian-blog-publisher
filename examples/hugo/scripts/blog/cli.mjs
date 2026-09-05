@@ -225,6 +225,7 @@ function publish() {
     const status = execSync('git status --porcelain').toString()
     if (!status.trim()) {
       log('No changes to commit')
+      // 没有变更时，返回空结果（不显示摘要弹窗）
       outputResult({ initialized: [], published: [], removed: [], slugs: {} })
       return
     }
@@ -234,15 +235,8 @@ function publish() {
 
     log('Published successfully')
 
-    const manifest = loadManifest()
-    const result = {
-      initialized: [],
-      published: Object.keys(manifest),
-      removed: [],
-      slugs: Object.fromEntries(Object.entries(manifest).map(([k, v]) => [k, v.replace('.md', '')]))
-    }
-
-    outputResult(result)
+    // publish 不重新同步，返回空结果让插件显示简单 Notice
+    outputResult({ initialized: [], published: [], removed: [], slugs: {} })
   } catch (error) {
     error('Git publish failed')
   }
