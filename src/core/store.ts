@@ -2,6 +2,7 @@ import type {
   ArticleIndex,
   BlogRunnerState,
   BlogState,
+  FailedOperation,
   LogEntry,
   LogLevel,
   SyncSummary
@@ -19,7 +20,8 @@ export class BlogStore {
     logs: [],
     lastResult: null,
     articles: null,
-    previewUrl: null
+    previewUrl: null,
+    lastFailedOperation: null
   }
   private listeners = new Set<(state: BlogState) => void>()
 
@@ -58,6 +60,10 @@ export class BlogStore {
 
   clearLogs() {
     this.patch({ logs: [] })
+  }
+
+  setFailedOperation(lastFailedOperation: FailedOperation | null) {
+    this.patch({ lastFailedOperation })
   }
 
   private patch(partial: Partial<BlogState>) {

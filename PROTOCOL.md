@@ -20,16 +20,20 @@
 
 ```typescript
 {
-  initialized: string[]           // 本次补齐了 frontmatter 的文章（vault 相对路径）
-  published: string[]             // 本次同步/构建的文章（vault 相对路径）
+  initialized: string[]           // 本次补齐了 frontmatter 的文章（文章目录相对路径）
+  published: string[]             // 本次同步/构建的文章（文章目录相对路径）
   removed: string[]               // 本次移除的文章（slug 或路径）
-  slugs: Record<string, string>   // vault 相对路径 → URL slug
+  slugs: Record<string, string>   // 文章目录相对路径 → URL slug
+  committed?: boolean             // publish 命令附带：这次是否产生了新提交
+  pushed?: boolean                // publish 命令附带：是否推送成功
 }
 ```
 
-四个字段都必填。没有内容时给空数组或空对象，不要省略字段。
+前四个字段必填，`committed`/`pushed` 只在 `publish` 命令里出现。没有内容时给空数组或空对象，不要省略字段。
 
 `slugs` 用于「复制博客地址」功能：插件把博客地址和 slug 拼成完整 URL。
+`published` + `slugs` 还会在推送成功后被插件记成本地快照，用于把面板上的文章标成「已上线」；
+`pushed` 为 false 时插件不记快照（本地预览的 sync/build 不带这两个字段，同理不会误标）。
 
 ### 完整示例
 
@@ -148,12 +152,14 @@ exports.collectArticleIssues = function (frontmatter) {
 | 状态 | 条件 |
 |------|------|
 | 未初始化 | 没有 frontmatter |
-| 未同步 | `publish !== true` |
+| 未发布 | `publish !== true` |
 | 需检查 | 校验器返回了 issues |
 | 草稿 | `draft === true` |
-| 可发布 | 以上都不满足 |
+| 待发布 | `publish === true`，还没推送过，或上线后内容有修改 |
+| 已上线 | `publish === true`，推送成功且文件自那之后没有再改过 |
 
-没配校验器时「需检查」这档不会出现。
+没配校验器时「需检查」这档不会出现。「已上线」依据插件本地记录的推送快照
+（每次 `publish` 命令成功后写入 data.json），快照里的 mtime 和当前文件一致才算在线上。
 
 ## 6. 参考实现
 

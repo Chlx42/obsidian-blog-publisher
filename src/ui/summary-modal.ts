@@ -41,14 +41,14 @@ export class SummaryModal extends Modal {
       )
     }
 
-    // 已初始化（首次补齐 frontmatter）
+    // 补全 frontmatter（笔记原来没有 frontmatter，同步时自动补上）
     if (result.initialized.length > 0) {
       this.renderSection(
         content,
-        '🆕 已初始化',
+        '🆕 补全 frontmatter',
         result.initialized,
         'initialized-list',
-        '首次同步，已补齐 frontmatter'
+        '这些笔记还没有 frontmatter，同步时已自动补齐'
       )
     }
 

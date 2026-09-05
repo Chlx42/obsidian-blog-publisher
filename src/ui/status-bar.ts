@@ -45,18 +45,21 @@ export class StatusBar {
   private getTaskStatusText(state: BlogState): string {
     const { task, articles, lastResult } = state
 
-    // 空闲或预览中：显示文章总数
+    // 空闲或预览中：显示文章计数
     if (task === 'idle' || task === 'previewing') {
       if (!articles) return STATE_LABELS[task]
 
-      const ready = articles.counts.ready || 0
+      const live = articles.counts.live || 0
+      const pending = articles.counts.pending || 0
       const draft = articles.counts.draft || 0
-      const total = ready + draft
+      // 预览里草稿也可见，所以预览计数含草稿。
+      const previewable = live + pending + draft
 
       if (task === 'previewing') {
-        return `📺 预览中 · ${total} 篇`
+        return `📺 预览中 · ${previewable} 篇`
       }
-      return total > 0 ? `✅ 已同步 ${total} 篇` : '博客：就绪'
+      if (pending > 0) return `🚀 已上线 ${live} · 待发布 ${pending}`
+      return live > 0 ? `✅ 已上线 ${live} 篇` : '博客：就绪'
     }
 
     // 同步/构建/发布中：显示进度

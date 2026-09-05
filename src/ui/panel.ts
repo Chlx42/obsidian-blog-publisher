@@ -4,12 +4,19 @@ import type { BlogStore } from '../core/store'
 import {
   STATE_LABELS,
   isBusy,
+  type ArticleEntry,
   type ArticleGroup,
   type BlogState,
   type SyncSummary
 } from '../types'
 
 export const BLOG_PANEL_VIEW_TYPE = 'blog-publisher-panel'
+
+/** 列表里展示短名，不带目录和 .md 后缀。 */
+function displayNameOf(path: string): string {
+  const basename = path.split('/').pop() || path
+  return basename.replace(/\.md$/, '')
+}
 
 export interface PanelActions {
   togglePreview: () => void
@@ -98,9 +105,17 @@ export class BlogPanelView extends ItemView {
     previewButton.addEventListener('click', () => this.actions.togglePreview())
 
     const publishButton = buttons.createEl('button', {
-      cls: 'blog-publisher-button mod-cta',
-      text: '一键发布'
+      cls: 'blog-publisher-button mod-cta'
     })
+    publishButton.createSpan({ text: '一键发布' })
+    // 待发布计数让「还有多少没上线」一眼可见；这个按钮也是唯一的推送入口。
+    const pendingCount = state.articles?.counts.pending ?? 0
+    if (pendingCount > 0) {
+      publishButton.createSpan({
+        cls: 'blog-publisher-publish-count',
+        text: String(pendingCount)
+      })
+    }
     publishButton.disabled = busy
     publishButton.addEventListener('click', () => this.actions.publish())
   }
@@ -109,28 +124,49 @@ export class BlogPanelView extends ItemView {
     const section = this.contentEl.createDiv({ cls: 'blog-publisher-section' })
     section.createDiv({ cls: 'blog-publisher-section-title', text: '上次同步' })
 
-    const stats = section.createDiv({ cls: 'blog-publisher-stats' })
-    const cards: [string, number][] = [
-      ['同步', result.published.length],
-      ['下线', result.removed.length],
-      ['补齐模板', result.initialized.length]
+    // 与摘要弹窗共用一套说法：发布 / 下线 / 补全 frontmatter。
+    const changes: [string, string[]][] = [
+      ['已发布', result.published],
+      ['已下线', result.removed],
+      ['补全 frontmatter', result.initialized]
     ]
-    for (const [label, value] of cards) {
-      const card = stats.createDiv({ cls: 'blog-publisher-stat' })
-      card.createDiv({ cls: 'blog-publisher-stat-value', text: String(value) })
-      card.createDiv({ cls: 'blog-publisher-stat-label', text: label })
+
+    if (!changes.some(([, items]) => items.length)) {
+      section.createDiv({ cls: 'blog-publisher-empty', text: '没有变更' })
+      return
     }
 
-    const details: [string, string[]][] = [
-      ['同步', result.published],
-      ['下线', result.removed],
-      ['补齐模板', result.initialized]
-    ]
-    for (const [label, items] of details) {
+    const chips = section.createDiv({ cls: 'blog-publisher-stat-chips' })
+    for (const [label, items] of changes) {
+      const chip = chips.createSpan({ cls: 'blog-publisher-stat-chip' })
+      if (!items.length) chip.addClass('is-zero')
+      chip.createSpan({ cls: 'blog-publisher-stat-label', text: label })
+      chip.createSpan({ cls: 'blog-publisher-stat-value', text: String(items.length) })
+    }
+
+    for (const [label, items] of changes) {
       if (!items.length) continue
+      section.createDiv({
+        cls: 'blog-publisher-result-title',
+        text: `${label}（${items.length}）`
+      })
       const list = section.createEl('ul', { cls: 'blog-publisher-result-list' })
       for (const item of items) {
-        list.createEl('li', { text: `${label}：${item}` })
+        const li = list.createEl('li')
+        // 下线记录是站点里已删除的旧文件，在 vault 里打不开，所以不可点。
+        if (item.endsWith('.md')) {
+          const link = li.createEl('a', {
+            cls: 'blog-publisher-result-link',
+            text: displayNameOf(item),
+            href: '#'
+          })
+          link.addEventListener('click', (e) => {
+            e.preventDefault()
+            this.actions.openPath(item)
+          })
+        } else {
+          li.setText(item)
+        }
       }
     }
   }
@@ -166,6 +202,7 @@ export class BlogPanelView extends ItemView {
       cls: 'blog-publisher-group-caret',
       text: isCollapsed ? '▸' : '▾'
     })
+    header.createSpan({ cls: 'blog-publisher-group-dot' })
     header.createSpan({ cls: 'blog-publisher-group-label', text: group.label })
     header.createSpan({ cls: 'blog-publisher-group-count', text: String(group.items.length) })
     header.addEventListener('click', () => {
@@ -178,66 +215,88 @@ export class BlogPanelView extends ItemView {
 
     if (isCollapsed) return
 
-    for (const entry of group.items) {
-      const row = wrapper.createDiv({ cls: 'blog-publisher-article' })
-      row.setAttr('data-status', entry.status.code)
-
-      const titleArea = row.createDiv({ cls: 'blog-publisher-article-main' })
-      titleArea.createDiv({ cls: 'blog-publisher-article-title', text: entry.title })
-      // 只有需要动手的才显示原因，其它状态标题本身已经说明问题。
-      if (entry.status.code === 'invalid' && entry.status.issues.length) {
-        titleArea.createDiv({ cls: 'blog-publisher-article-issue', text: entry.status.issues[0] })
-      }
-      titleArea.addEventListener('click', () => this.actions.openPath(entry.path))
-
-      const actions = row.createDiv({ cls: 'blog-publisher-article-actions' })
-
-      const publish = entry.frontmatter?.publish === true
-      const draft = entry.frontmatter?.draft === true
-
-      const publishBtn = actions.createEl('button', {
-        text: publish ? '隐藏' : '发布',
-        cls: 'blog-publisher-action-btn'
+    // 待发布组带一句行动指引：这个组唯一要做的事就是上方的一键发布。
+    if (group.code === 'pending') {
+      wrapper.createDiv({
+        cls: 'blog-publisher-group-hint',
+        text: '点击上方「一键发布」推送到线上'
       })
-      publishBtn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        this.actions.togglePublish(entry.path)
-      })
+    }
 
-      if (publish) {
-        const draftBtn = actions.createEl('button', {
-          text: draft ? '上线' : '草稿',
-          cls: 'blog-publisher-action-btn'
-        })
-        draftBtn.addEventListener('click', (e) => {
-          e.stopPropagation()
-          this.actions.toggleDraft(entry.path)
-        })
+    for (const entry of group.items) this.renderArticle(wrapper, entry)
+  }
 
-        const slug = this.store.getState().lastResult?.slugs[entry.path]
-        if (slug) {
-          const state = this.store.getState()
-          const isPreviewing = this.actions.isPreviewing()
+  private renderArticle(wrapper: HTMLElement, entry: ArticleEntry) {
+    const row = wrapper.createDiv({ cls: 'blog-publisher-article' })
+    row.setAttr('data-status', entry.status.code)
 
-          const copyBtn = actions.createEl('button', {
-            text: '📋',
-            cls: 'blog-publisher-action-btn',
-            attr: { title: isPreviewing ? `复制预览地址 (${state.previewUrl}/blog/${slug})` : '复制博客地址' }
-          })
-          copyBtn.addEventListener('click', (e) => {
-            e.stopPropagation()
-
-            if (isPreviewing && state.previewUrl) {
-              const previewUrl = `${state.previewUrl}/blog/${slug}`
-              navigator.clipboard.writeText(previewUrl).then(() => {
-                // Notice 会被 Obsidian 显示
-              })
-            } else {
-              this.actions.copyUrl(entry.path, slug)
-            }
-          })
-        }
+    const titleArea = row.createDiv({ cls: 'blog-publisher-article-main' })
+    titleArea.createDiv({ cls: 'blog-publisher-article-title', text: entry.title })
+    // 需要动手的才显示原因；已上线/草稿的标题本身已经说明问题。
+    if (entry.status.code === 'invalid' && entry.status.issues.length) {
+      titleArea.createDiv({ cls: 'blog-publisher-article-issue', text: entry.status.issues[0] })
+    } else if (entry.status.issues.length && entry.status.code !== 'live') {
+      const note = titleArea.createDiv({ cls: 'blog-publisher-article-note' })
+      note.setText(entry.status.issues[0])
+      if (entry.status.modified) {
+        note.createSpan({ cls: 'blog-publisher-modified-badge', text: '有修改' })
       }
     }
+    titleArea.addEventListener('click', () => this.actions.openPath(entry.path))
+
+    const actions = row.createDiv({ cls: 'blog-publisher-article-actions' })
+    const publish = entry.frontmatter?.publish === true
+    const draft = entry.frontmatter?.draft === true
+
+    // 复制地址：已上线/有修改的记录里有权威 slug。预览中复制的是本地预览链接。
+    const slug = entry.status.slug
+    if (slug) {
+      const state = this.store.getState()
+      const previewing = this.actions.isPreviewing()
+      actions.createEl('button', {
+        text: '📋',
+        cls: 'blog-publisher-action-btn',
+        attr: {
+          title: previewing && state.previewUrl
+            ? `复制预览地址 (${state.previewUrl}/blog/${slug})`
+            : '复制博客地址'
+        }
+      }).addEventListener('click', (e) => {
+        e.stopPropagation()
+        if (previewing && state.previewUrl) {
+          void navigator.clipboard.writeText(`${state.previewUrl}/blog/${slug}`)
+        } else {
+          this.actions.copyUrl(entry.path, slug)
+        }
+      })
+    }
+
+    if (publish) {
+      actions.createEl('button', {
+        text: draft ? '取消草稿' : '草稿',
+        cls: 'blog-publisher-action-btn',
+        attr: {
+          title: draft ? '取消草稿，转回待发布' : '转为草稿，正式发布时隐藏'
+        }
+      }).addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.actions.toggleDraft(entry.path)
+      })
+    }
+
+    // 已上线且没有修改时不给「发布」类按钮：内容没变就不该再推一次。
+    // 这里的「发布」只是把 publish 标成 true，真正的推送是上方的一键发布。
+    actions.createEl('button', {
+      text: publish ? '隐藏' : '发布',
+      cls: 'blog-publisher-action-btn',
+      attr: {
+        title: publish
+          ? '取消发布，下次推送时从博客下线'
+          : '标记 publish: true，加入待发布列表'
+      }
+    }).addEventListener('click', (e) => {
+      e.stopPropagation()
+      this.actions.togglePublish(entry.path)
+    })
   }
 }

@@ -66,14 +66,31 @@ export interface SyncSummary {
   published: string[]
   removed: string[]
   slugs: Record<string, string>
+  /** publish 命令附带：这次是否真的产生了提交 / 推送成功。 */
+  committed?: boolean
+  pushed?: boolean
 }
 
-export type ArticleStatusCode = 'uninitialized' | 'not-published' | 'invalid' | 'draft' | 'ready'
+/**
+ * 文章生命周期：未初始化 → 未发布 →（标记 publish）待发布 →（推送成功）已上线。
+ * 上线后再编辑会回到「待发布」并带「有修改」标记；draft 是发布流之外的预览态。
+ */
+export type ArticleStatusCode =
+  | 'uninitialized'
+  | 'unpublished'
+  | 'invalid'
+  | 'draft'
+  | 'pending'
+  | 'live'
 
 export interface ArticleStatus {
   code: ArticleStatusCode
   label: string
   issues: string[]
+  /** manifest 里的权威 slug，已上线时可拼出博客地址。 */
+  slug?: string
+  /** 待发布且之前上线过：说明是上线后改了内容，等一次更新推送。 */
+  modified?: boolean
 }
 
 /** 从 vault 读出来的一篇笔记，只保留分组需要的字段，不含 Obsidian 对象。 */
@@ -81,6 +98,7 @@ export interface VaultNote {
   path: string
   basename: string
   frontmatter?: Record<string, unknown>
+  mtime?: number
 }
 
 export interface ArticleEntry extends VaultNote {
@@ -106,6 +124,13 @@ export interface BlogState {
   lastResult: SyncSummary | null
   articles: ArticleIndex | null
   previewUrl: string | null
+  lastFailedOperation: FailedOperation | null
+}
+
+export interface FailedOperation {
+  type: 'publish' | 'preview' | 'sync'
+  error: string
+  timestamp: number
 }
 
 /** Astro + Bun 预设，保持现有行为。 */
@@ -199,7 +224,7 @@ export const DEFAULT_SETTINGS: BlogPublisherSettings = {
   commands: { ...DEFAULT_COMMANDS },
   resultLinePrefix: '__BLOG_RESULT__',
   customValidatorPath: '',
-  collapsedGroups: ['ready']  // 默认折叠「已发布」分组
+  collapsedGroups: []
 }
 
 /** 发布器结构化结果行的前缀，stdout 里混着构建输出，靠它挑出结果行。 */

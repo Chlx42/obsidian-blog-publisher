@@ -12,7 +12,8 @@ export class BlogLogModal extends Modal {
   constructor(
     app: App,
     private store: BlogStore,
-    private error?: string
+    private error?: string,
+    private onRetry?: () => Promise<void>
   ) {
     super(app)
   }
@@ -21,6 +22,14 @@ export class BlogLogModal extends Modal {
     this.titleEl.setText('博客任务日志')
 
     const actions = this.contentEl.createDiv({ cls: 'blog-publisher-log-actions' })
+
+    if (this.onRetry && this.error) {
+      actions.createEl('button', { text: '重试', cls: 'mod-warning' }).addEventListener('click', async () => {
+        this.close()
+        await this.onRetry!()
+      })
+    }
+
     actions.createEl('button', { text: '复制全部' }).addEventListener('click', () => {
       void navigator.clipboard.writeText(this.plainText()).then(() => new Notice('日志已复制'))
     })

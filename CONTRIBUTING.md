@@ -267,9 +267,9 @@ describe('inspectArticle', () => {
     expect(result.code).toBe('uninitialized')
   })
 
-  it('should return not-published when publish is false', () => {
+  it('should return unpublished when publish is false', () => {
     const result = inspectArticle({ publish: false })
-    expect(result.code).toBe('not-published')
+    expect(result.code).toBe('unpublished')
   })
 })
 ```

@@ -1,7 +1,8 @@
 import type { App, TFile } from 'obsidian'
 
 import { buildArticleIndex } from './core/article-index'
-import { inspectArticle, type Validator } from './core/article-status'
+import { inspectArticle, type LiveEntry, type Validator } from './core/article-status'
+import { sourceKeyOfNotePath, notePathOfSourceKey } from './core/publish-record'
 import type { ArticleEntry, ArticleIndex, VaultNote } from './types'
 
 /**
@@ -36,29 +37,39 @@ export class VaultNotes {
   }
 
   private toNote(file: TFile): VaultNote {
-    return { path: file.path, basename: file.basename, frontmatter: this.frontmatterOf(file) }
+    return {
+      path: file.path,
+      basename: file.basename,
+      frontmatter: this.frontmatterOf(file),
+      mtime: file.stat.mtime
+    }
   }
 
   /** metadataCache 在内存里，每次切文件重算无感知，不需要缓存。 */
-  buildIndex(): ArticleIndex {
+  buildIndex(liveSources?: Record<string, LiveEntry> | null): ArticleIndex {
     const notes = this.app.vault
       .getMarkdownFiles()
       .filter((file) => this.isBlogNote(file))
       .map((file) => this.toNote(file))
-    return buildArticleIndex(notes, this.validator)
+    return buildArticleIndex(notes, this.validator, liveSources, this.articlesFolder())
   }
 
-  currentArticle(): { file: TFile; entry: ArticleEntry } | null {
+  currentArticle(liveSources?: Record<string, LiveEntry> | null): { file: TFile; entry: ArticleEntry } | null {
     const file = this.app.workspace.getActiveFile()
     if (!file || !this.isBlogNote(file)) return null
     const note = this.toNote(file)
-    const status = inspectArticle(note.frontmatter, this.validator)
+    const sourceKey = sourceKeyOfNotePath(note.path, this.articlesFolder())
+    const live = (sourceKey && liveSources?.[sourceKey]) || null
+    const status = inspectArticle(note.frontmatter, this.validator, live, note.mtime)
     const title = typeof note.frontmatter?.title === 'string' ? note.frontmatter.title : file.basename
     return { file, entry: { ...note, title, status } }
   }
 
   async openPath(path: string): Promise<void> {
-    const file = this.app.vault.getFileByPath(path)
+    // 同步结果里的是 manifest source key（相对文章目录），打不开时按文章目录拼回 vault 路径。
+    const file =
+      this.app.vault.getFileByPath(path) ??
+      this.app.vault.getFileByPath(notePathOfSourceKey(path, this.articlesFolder()))
     if (file) await this.app.workspace.getLeaf().openFile(file)
   }
 }

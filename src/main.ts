@@ -2,6 +2,11 @@ import { FileSystemAdapter, Modal, Notice, Plugin, TFile, type App } from 'obsid
 
 import { loadValidator, type Validator } from './core/article-status'
 import { buildBlogUrl, toggleDraft, togglePublish } from './core/frontmatter'
+import {
+  buildPublishRecord,
+  notePathOfSourceKey,
+  type PublishRecord
+} from './core/publish-record'
 import { BlogStore } from './core/store'
 import { TaskRunner } from './core/task-runner'
 import { BlogLogModal } from './ui/log-modal'
@@ -12,6 +17,7 @@ import { SummaryModal } from './ui/summary-modal'
 import {
   DEFAULT_COMMANDS,
   DEFAULT_SETTINGS,
+  type ArticleIndex,
   type ArticleStatus,
   type BlogPublisherSettings
 } from './types'
@@ -21,6 +27,8 @@ const AUTO_SYNC_DEBOUNCE_MS = 800
 
 export default class BlogPublisherPlugin extends Plugin {
   settings: BlogPublisherSettings = DEFAULT_SETTINGS
+  /** 最近一次成功推送的存根，持久化在 data.json，重启后面板仍能区分「已上线」。 */
+  private publishRecord: PublishRecord | null = null
   private store!: BlogStore
   private runner!: TaskRunner
   private notes!: VaultNotes
@@ -99,7 +107,7 @@ export default class BlogPublisherPlugin extends Plugin {
       id: 'check-current-article',
       name: '检查当前博客文章',
       checkCallback: (checking) => {
-        const article = this.notes.currentArticle()
+        const article = this.notes.currentArticle(this.publishRecord?.sources ?? null)
         if (!article) return false
         if (!checking) new ArticleStatusModal(this.app, article.file, article.entry.status).open()
         return true
@@ -134,16 +142,20 @@ export default class BlogPublisherPlugin extends Plugin {
 
   /** commands 是嵌套对象，浅合并会让缺失的命令变成 undefined，设置页会崩。 */
   async loadSettings() {
-    const saved = (await this.loadData()) as Partial<BlogPublisherSettings> | null
+    const saved = (await this.loadData()) as
+      | (Partial<BlogPublisherSettings> & { publishRecord?: PublishRecord | null })
+      | null
+    const { publishRecord, ...savedSettings } = saved ?? {}
     this.settings = {
       ...DEFAULT_SETTINGS,
-      ...saved,
-      commands: { ...DEFAULT_COMMANDS, ...saved?.commands }
+      ...savedSettings,
+      commands: { ...DEFAULT_COMMANDS, ...savedSettings.commands }
     }
+    this.publishRecord = publishRecord ?? null
   }
 
   async saveSettings() {
-    await this.saveData(this.settings)
+    await this.saveData({ ...this.settings, publishRecord: this.publishRecord })
     this.runner?.updateSettings(this.settings)
     await this.loadValidator()
     this.notes?.setValidator(this.validator)
@@ -185,7 +197,13 @@ export default class BlogPublisherPlugin extends Plugin {
       } else {
         new Notice('博客预览已停止')
       }
+      this.store.setFailedOperation(null)
     } catch (error) {
+      this.store.setFailedOperation({
+        type: 'preview',
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now()
+      })
       this.showError(error)
     }
   }
@@ -202,12 +220,32 @@ export default class BlogPublisherPlugin extends Plugin {
           this.app,
           '✅ 发布完成',
           result,
-          (path) => void this.notes.openPath(path)
+          (path) => void this.notes.openPath(notePathOfSourceKey(path, this.settings.articlesFolder))
         ).open()
       } else {
         new Notice('博客发布成功')
       }
+      // 推送成功才记快照：这是面板区分「已上线」和「待发布」的依据。
+      // 本地预览的 sync/build 不走这里，不会把未推送的内容标成已上线。
+      if (result && result.pushed !== false && result.published.length) {
+        this.publishRecord = buildPublishRecord(
+          result.published,
+          result.slugs,
+          Date.now(),
+          (sourceKey) =>
+            this.app.vault.getFileByPath(notePathOfSourceKey(sourceKey, this.settings.articlesFolder))
+              ?.stat.mtime ?? null
+        )
+        await this.saveData({ ...this.settings, publishRecord: this.publishRecord })
+      }
+      this.refreshArticles()
+      this.store.setFailedOperation(null)
     } catch (error) {
+      this.store.setFailedOperation({
+        type: 'publish',
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now()
+      })
       this.showError(error)
     }
   }
@@ -215,10 +253,21 @@ export default class BlogPublisherPlugin extends Plugin {
   private async togglePublish(path: string) {
     const file = this.app.vault.getFileByPath(path)
     if (!file) return
+
+    // 乐观更新：立即更新 UI
+    const currentState = this.store.getState().articles
+    if (currentState) {
+      const optimisticState = this.optimisticallyTogglePublish(currentState, path)
+      this.store.setArticles(optimisticState)
+    }
+
     try {
       await togglePublish(this.app, file)
+      // 成功后用真实数据刷新
       this.refreshArticles()
     } catch (error) {
+      // 失败时回滚到真实状态
+      this.refreshArticles()
       this.showError(error)
     }
   }
@@ -226,10 +275,21 @@ export default class BlogPublisherPlugin extends Plugin {
   private async toggleDraft(path: string) {
     const file = this.app.vault.getFileByPath(path)
     if (!file) return
+
+    // 乐观更新：立即更新 UI
+    const currentState = this.store.getState().articles
+    if (currentState) {
+      const optimisticState = this.optimisticallyToggleDraft(currentState, path)
+      this.store.setArticles(optimisticState)
+    }
+
     try {
       await toggleDraft(this.app, file)
+      // 成功后用真实数据刷新
       this.refreshArticles()
     } catch (error) {
+      // 失败时回滚到真实状态
+      this.refreshArticles()
       this.showError(error)
     }
   }
@@ -245,11 +305,12 @@ export default class BlogPublisherPlugin extends Plugin {
   }
 
   private refreshArticles() {
-    this.store.setArticles(this.notes.buildIndex())
+    this.store.setArticles(this.notes.buildIndex(this.publishRecord?.sources ?? null))
   }
 
   private renderStatusBar() {
-    const article = this.notes.currentArticle()
+    const liveSources = this.publishRecord?.sources ?? null
+    const article = this.notes.currentArticle(liveSources)
     this.statusBar.render(this.store.getState(), article?.entry.status.label ?? null)
     this.statusBar.setArticleStatusCode(article?.entry.status.code ?? null)
   }
@@ -272,7 +333,56 @@ export default class BlogPublisherPlugin extends Plugin {
   private showError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     new Notice(`博客操作失败：${message}`, 10_000)
-    new BlogLogModal(this.app, this.store, message).open()
+    new BlogLogModal(this.app, this.store, message, () => this.retryLastOperation()).open()
+  }
+
+  private async retryLastOperation() {
+    const failed = this.store.getState().lastFailedOperation
+    if (!failed) return
+
+    switch (failed.type) {
+      case 'publish':
+        await this.publishBlog()
+        break
+      case 'preview':
+        await this.togglePreview()
+        break
+      case 'sync':
+        await this.runner.syncPreviewContent()
+        break
+    }
+  }
+
+  /** 乐观更新：切换 publish 状态 */
+  private optimisticallyTogglePublish(index: ArticleIndex, path: string): ArticleIndex {
+    const groups = index.groups.map(group => ({
+      ...group,
+      items: group.items.map(item => {
+        if (item.path !== path) return item
+        const newPublish = !(item.frontmatter?.publish === true)
+        return {
+          ...item,
+          frontmatter: { ...item.frontmatter, publish: newPublish }
+        }
+      })
+    }))
+    return { ...index, groups }
+  }
+
+  /** 乐观更新：切换 draft 状态 */
+  private optimisticallyToggleDraft(index: ArticleIndex, path: string): ArticleIndex {
+    const groups = index.groups.map(group => ({
+      ...group,
+      items: group.items.map(item => {
+        if (item.path !== path) return item
+        const newDraft = !(item.frontmatter?.draft === true)
+        return {
+          ...item,
+          frontmatter: { ...item.frontmatter, draft: newDraft }
+        }
+      })
+    }))
+    return { ...index, groups }
   }
 }
 

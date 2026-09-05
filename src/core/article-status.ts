@@ -12,7 +12,7 @@ export interface ValidatorLoadResult {
  * 加载校验器并回报失败原因。
  *
  * 运行时降级为不校验，但原因必须能显示出来：路径填错时插件会把所有文章都判成
- * 「可发布」，静默失败的表现和一切正常一样，用户没法自己发现。
+ * 「待发布」，静默失败的表现和一切正常一样，用户没法自己发现。
  */
 export function loadValidatorResult(path: string): ValidatorLoadResult {
   const trimmed = path.trim()
@@ -42,9 +42,24 @@ export async function loadValidator(path: string): Promise<Validator | null> {
   return loadValidatorResult(path).validator
 }
 
+/** 一次成功推送留在本地的记录条目：上线时的 slug 和文件修改时间。 */
+export interface LiveEntry {
+  slug: string
+  mtime: number
+}
+
+/**
+ * 判定一篇文章的面板状态。只依赖传入数据，方便单测。
+ *
+ * 判定顺序即优先级：没初始化 > 没启用发布 > 校验失败 > 草稿 > 线上状态。
+ * 「已上线」要求推送记录里的 mtime 和当前文件一致——改过一个字都会回到「待发布」，
+ * 这正是防止「已发布还能再推一次」的关键。
+ */
 export function inspectArticle(
   frontmatter?: Record<string, unknown>,
-  validator?: Validator | null
+  validator?: Validator | null,
+  live?: LiveEntry | null,
+  mtime?: number
 ): ArticleStatus {
   if (!frontmatter) {
     return {
@@ -56,8 +71,8 @@ export function inspectArticle(
 
   if (frontmatter.publish !== true) {
     return {
-      code: 'not-published',
-      label: '文章：未同步',
+      code: 'unpublished',
+      label: '文章：未发布',
       issues: ['publish 不是 true，当前文章不会同步到博客']
     }
   }
@@ -76,6 +91,28 @@ export function inspectArticle(
     }
   }
 
-  return { code: 'ready', label: '文章：可发布', issues: [] }
-}
+  if (!live) {
+    return {
+      code: 'pending',
+      label: '文章：待发布',
+      issues: ['还没推送上线，点击「一键发布」发布到博客']
+    }
+  }
 
+  if (mtime !== live.mtime) {
+    return {
+      code: 'pending',
+      label: '文章：有修改',
+      issues: ['上线后内容有改动，点击「一键发布」更新到博客'],
+      slug: live.slug,
+      modified: true
+    }
+  }
+
+  return {
+    code: 'live',
+    label: '文章：已上线',
+    issues: [],
+    slug: live.slug
+  }
+}

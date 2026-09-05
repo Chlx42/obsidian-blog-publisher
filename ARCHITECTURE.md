@@ -274,7 +274,7 @@ function buildIndex(): ArticleIndex {
 
 **状态分组：**
 ```typescript
-type ArticleStatusCode = 'uninitialized' | 'not-published' | 'invalid' | 'draft' | 'ready'
+type ArticleStatusCode = 'uninitialized' | 'unpublished' | 'invalid' | 'draft' | 'pending' | 'live'
 
 interface ArticleGroup {
   code: ArticleStatusCode
@@ -282,12 +282,17 @@ interface ArticleGroup {
   items: ArticleEntry[]
 }
 
-// 面板显示顺序：
-// 1. ready - 可发布（publish: true, 无 issue, draft: false）
-// 2. draft - 草稿（publish: true, 无 issue, draft: true）
-// 3. invalid - 需检查（publish: true, 有 issue）
-// 4. not-published - 未同步（publish !== true）
-// 5. uninitialized - 未初始化（无 frontmatter）
+// 面板显示顺序（需要动手的排前面）：
+// 1. invalid - 需检查（publish: true, 有 issue）
+// 2. pending - 待发布（publish: true，还没推送，或上线后内容有修改）
+// 3. live - 已上线（publish: true，推送成功且内容未再修改）
+// 4. draft - 草稿（publish: true, 无 issue, draft: true）
+// 5. unpublished - 未发布（publish !== true）
+// 6. uninitialized - 未初始化（无 frontmatter）
+//
+// 「已上线」的依据是插件在每次推送成功后记录的快照
+// （source key → { slug, mtime }，持久化在 data.json）。
+// 文件 mtime 和快照不一致就视为有修改，回到「待发布」。
 ```
 
 ### 5. Validator System - 可插拔的校验规则
