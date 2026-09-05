@@ -42,6 +42,8 @@ export interface BlogPublisherSettings {
   previewPort: number
   previewMode: 'development' | 'production'
   autoSyncOnSave: boolean
+  /** 状态栏是否显示博客状态（任务进度 + 当前文章状态）。 */
+  showStatusBar: boolean
   siteUrl: string
   runtime: RuntimeType
   customRuntimePath: string
@@ -91,6 +93,8 @@ export interface ArticleStatus {
   slug?: string
   /** 待发布且之前上线过：说明是上线后改了内容，等一次更新推送。 */
   modified?: boolean
+  /** 未发布但站点上还挂着旧文件：等一次推送下线。 */
+  pendingRemoval?: boolean
 }
 
 /** 从 vault 读出来的一篇笔记，只保留分组需要的字段，不含 Obsidian 对象。 */
@@ -218,6 +222,7 @@ export const DEFAULT_SETTINGS: BlogPublisherSettings = {
   previewPort: 4173,
   previewMode: 'development',
   autoSyncOnSave: true,
+  showStatusBar: true,
   siteUrl: '',
   runtime: 'bun',
   customRuntimePath: '',

@@ -35,6 +35,19 @@ describe('inspectArticle', () => {
     expect(inspectArticle({ publish: false }).code).toBe('unpublished')
   })
 
+  test('隐藏前上过线的文章标记待下线，提示等一次推送', () => {
+    const status = inspectArticle({ publish: false }, null, liveEntry, 1000)
+    expect(status.code).toBe('unpublished')
+    expect(status.pendingRemoval).toBe(true)
+    expect(status.issues).toEqual(['已隐藏，下次推送时从博客下线'])
+  })
+
+  test('没上线过的隐藏文章不算待下线', () => {
+    const status = inspectArticle({ publish: false })
+    expect(status.pendingRemoval).toBe(false)
+    expect(status.issues).toEqual(['publish 不是 true，当前文章不会同步到博客'])
+  })
+
   test('publish 为 true 但没推送记录时是待发布', () => {
     const status = inspectArticle(validArticle)
     expect(status.code).toBe('pending')

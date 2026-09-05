@@ -1,6 +1,7 @@
 import { FileSystemAdapter, Modal, Notice, Plugin, TFile, type App } from 'obsidian'
 
 import { loadValidator, type Validator } from './core/article-status'
+import { hasPushableWork } from './core/article-index'
 import { buildBlogUrl, toggleDraft, togglePublish } from './core/frontmatter'
 import {
   buildPublishRecord,
@@ -209,6 +210,12 @@ export default class BlogPublisherPlugin extends Plugin {
   }
 
   private async publishBlog() {
+    // 与面板按钮同一套判断：没有可推送的变更就不空跑一次发布。
+    // 面板按钮此时是置灰的，这里拦的是 ribbon 图标和命令面板入口。
+    if (!hasPushableWork(this.store.getState().articles)) {
+      new Notice('没有待发布或待下线的文章')
+      return
+    }
     try {
       new Notice('正在构建并发布博客…', 5_000)
       await this.runner.publish()
@@ -309,6 +316,8 @@ export default class BlogPublisherPlugin extends Plugin {
   }
 
   private renderStatusBar() {
+    // 每次重绘都同步可见性，设置页切换开关后立即生效。
+    this.statusBar.setVisible(this.settings.showStatusBar)
     const liveSources = this.publishRecord?.sources ?? null
     const article = this.notes.currentArticle(liveSources)
     this.statusBar.render(this.store.getState(), article?.entry.status.label ?? null)

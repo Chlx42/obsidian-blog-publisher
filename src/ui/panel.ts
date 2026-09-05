@@ -1,6 +1,7 @@
 import { ItemView, type WorkspaceLeaf } from 'obsidian'
 
 import type { BlogStore } from '../core/store'
+import { hasPushableWork } from '../core/article-index'
 import {
   STATE_LABELS,
   isBusy,
@@ -116,7 +117,10 @@ export class BlogPanelView extends ItemView {
         text: String(pendingCount)
       })
     }
-    publishButton.disabled = busy
+    // 没有待发布、也没有等待下线的文章时置灰：推一次只会得到空结果。
+    const pushable = hasPushableWork(state.articles)
+    publishButton.disabled = busy || !pushable
+    if (!pushable && !busy) publishButton.setAttr('title', '没有待发布或待下线的文章')
     publishButton.addEventListener('click', () => this.actions.publish())
   }
 

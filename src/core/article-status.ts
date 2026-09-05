@@ -73,7 +73,11 @@ export function inspectArticle(
     return {
       code: 'unpublished',
       label: '文章：未发布',
-      issues: ['publish 不是 true，当前文章不会同步到博客']
+      // 站点上还挂着旧文件的隐藏文章，只能靠下一次推送下线。
+      issues: [
+        live ? '已隐藏，下次推送时从博客下线' : 'publish 不是 true，当前文章不会同步到博客'
+      ],
+      pendingRemoval: !!live
     }
   }
 

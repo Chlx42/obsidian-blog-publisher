@@ -69,3 +69,14 @@ export function buildArticleIndex(
 
   return { groups, counts, total: entries.length }
 }
+
+/**
+ * 有没有值得推送的变更：有待发布的文章，或者有已隐藏但站点上还挂着旧文件的
+ * 文章（下一次推送负责把它们下线）。一键发布按钮据此置灰，避免空跑一次发布。
+ */
+export function hasPushableWork(index: ArticleIndex | null): boolean {
+  if (!index) return false
+  if (index.counts.pending > 0) return true
+  const unpublished = index.groups.find((group) => group.code === 'unpublished')
+  return !!unpublished?.items.some((item) => item.status.pendingRemoval)
+}

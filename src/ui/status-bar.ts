@@ -37,6 +37,12 @@ export class StatusBar {
     this.articleEl.setText(articleLabel)
   }
 
+  /** 设置里关掉状态栏显示后，两个元素一起隐藏。 */
+  setVisible(visible: boolean) {
+    this.taskEl.style.display = visible ? '' : 'none'
+    if (!visible) this.articleEl.style.display = 'none'
+  }
+
   setArticleStatusCode(code: string | null) {
     if (code) this.articleEl.setAttr('data-status', code)
     else this.articleEl.removeAttribute('data-status')

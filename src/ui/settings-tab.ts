@@ -118,6 +118,16 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
       )
 
     new Setting(containerEl)
+      .setName('状态栏显示博客状态')
+      .setDesc('关闭后底部状态栏不再显示「已上线/待发布」计数和当前文章状态')
+      .addToggle((toggle) =>
+        toggle.setValue(this.host.settings.showStatusBar).onChange(async (value) => {
+          this.host.settings.showStatusBar = value
+          await this.host.saveSettings()
+        })
+      )
+
+    new Setting(containerEl)
       .setName('博客地址')
       .setDesc('用于「复制博客地址」功能')
       .addText((text) =>
