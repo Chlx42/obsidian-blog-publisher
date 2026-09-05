@@ -73,7 +73,9 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('文章文件夹')
-      .setDesc(`相对于当前 Vault 的博客笔记目录，当前识别到 ${this.host.articleCount()} 篇`)
+      .setDesc(
+        `相对于当前 Vault 的博客笔记目录，目录外的笔记标记 publish: true 也会被识别，当前识别到 ${this.host.articleCount()} 篇`
+      )
       .addText((text) =>
         text.setValue(this.host.settings.articlesFolder).onChange(async (value) => {
           this.host.settings.articlesFolder = value.trim().replace(/^\/+|\/+$/g, '')

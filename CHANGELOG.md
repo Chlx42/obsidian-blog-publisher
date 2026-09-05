@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **文章留在原地** - 文章目录之外的笔记只要 frontmatter 标记 `publish: true` 也会被识别，
+  进入面板、预览和发布流程，无需移动到博客文件夹。目录外笔记只读取、不回写；
+  manifest source key 以 `../` 前缀与目录内路径区分（详见 PROTOCOL.md「同步范围」）。
+
 ## [1.0.0] - 2024-09-04
 
 ### Added

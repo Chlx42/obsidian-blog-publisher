@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 
 export type BlogSyncConfig = {
+  /** Vault 绝对路径，用于扫描文章目录之外的 publish 笔记。 */
+  vaultRoot: string
   sourceDir: string
   attachmentsDir: string
   outputDir: string
@@ -85,6 +87,7 @@ export function loadBlogConfig(
 ): BlogSyncConfig {
   const paths = loadBlogPaths(env)
   return {
+    vaultRoot: paths.vaultRoot,
     sourceDir: resolve(paths.vaultRoot, paths.articlesFolder),
     attachmentsDir: resolve(paths.vaultRoot, paths.attachmentsFolder),
     outputDir: resolve(repositoryRoot, 'src/content/blog'),

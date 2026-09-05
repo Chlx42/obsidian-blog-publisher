@@ -253,7 +253,8 @@ const path = [
 ```typescript
 function buildIndex(): ArticleIndex {
   const folder = vault.getAbstractFileByPath(articlesFolder)
-  const files = getAllMarkdownFiles(folder)
+  // 文章目录内的 md + 目录外标记 publish: true 的 md（frontmatter 全部来自 metadataCache）
+  const files = getAllMarkdownFiles(folder).concat(getPublishMarkedFilesOutside(folder))
   
   const entries = files.map(file => {
     const frontmatter = metadataCache.getFileCache(file)?.frontmatter
@@ -584,7 +585,9 @@ export function collectArticleIssues(frontmatter) {
 
 ### 文章扫描
 
-**当前实现：** 每次文件变更全量扫描 articlesFolder。
+**当前实现：** 每次文件变更全量重建索引：文章目录内的 md + 目录外标记
+`publish: true` 的 md（frontmatter 读内存里的 metadataCache，不碰文件）。
+vault 级的目录外扫描只在同步脚本里做，插件不重复扫盘。
 
 **优化空间：**
 - 增量扫描（只更新变更的文章）

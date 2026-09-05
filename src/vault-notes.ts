@@ -25,9 +25,15 @@ export class VaultNotes {
     return this.articlesFolder().replace(/^\/+|\/+$/g, '')
   }
 
+  /**
+   * 博客文章的范围：文章目录内的所有 md，加上目录外显式标记
+   * publish: true 的 md（和发布器的同步范围保持同一规则）。
+   */
   isBlogNote(file: TFile): boolean {
+    if (file.extension !== 'md') return false
     const folder = this.folder()
-    return file.extension === 'md' && !!folder && file.path.startsWith(`${folder}/`)
+    if (folder && file.path.startsWith(`${folder}/`)) return true
+    return this.frontmatterOf(file)?.publish === true
   }
 
   private frontmatterOf(file: TFile): Record<string, unknown> | undefined {

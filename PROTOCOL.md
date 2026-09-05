@@ -20,10 +20,10 @@
 
 ```typescript
 {
-  initialized: string[]           // 本次补齐了 frontmatter 的文章（文章目录相对路径）
-  published: string[]             // 本次同步/构建的文章（文章目录相对路径）
+  initialized: string[]           // 本次补齐了 frontmatter 的文章（source key，见「同步范围」）
+  published: string[]             // 本次同步/构建的文章（source key）
   removed: string[]               // 本次移除的文章（slug 或路径）
-  slugs: Record<string, string>   // 文章目录相对路径 → URL slug
+  slugs: Record<string, string>   // source key → URL slug
   committed?: boolean             // publish 命令附带：这次是否产生了新提交
   pushed?: boolean                // publish 命令附带：是否推送成功
 }
@@ -92,6 +92,17 @@ git 和 bun 都往 stderr 写进度信息，按流分会把正常进度标成错
 
 脚本用这两个变量定位源文件。插件设置是文章目录的唯一来源，脚本不该再维护
 一份自己的配置——否则两边不一致时很难排查。
+
+### 同步范围
+
+脚本要处理的笔记 = 文章目录内的全部 md + 文章目录之外标记了 `publish: true` 的 md。
+目录外的部分由脚本自己扫描 vault 得出（跳过隐藏目录、`node_modules`、博客仓库自身和
+符号链接），**只读取、不回写**——目录内的笔记会在同步时自动补齐 frontmatter 模板，
+目录外的笔记归用户自己管，一个字都不改。
+
+source key 的约定：目录内笔记是相对文章目录的路径；目录外笔记是 `../` + vault 相对路径。
+两个 key 空间互斥（目录内的相对路径不会以 `../` 开头），插件靠这个前缀在
+manifest key 和 vault 路径之间互转。
 
 另外插件会把这些目录补进 `PATH`：运行时所在目录、`/opt/homebrew/bin`、
 `/usr/local/bin`、`/usr/bin`、`/bin`。macOS 上图形应用拿不到 shell 的 PATH，

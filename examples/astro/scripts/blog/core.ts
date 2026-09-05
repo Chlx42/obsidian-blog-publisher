@@ -14,7 +14,7 @@ import { pinyin } from 'pinyin-pro'
 import { parse, stringify } from 'yaml'
 
 import { collectArticleIssues } from './article-rules'
-import type { BlogSyncConfig } from './config'
+import { repositoryRoot, type BlogSyncConfig } from './config'
 
 type HeroImage = Record<string, unknown> & { src?: unknown }
 
@@ -63,6 +63,12 @@ const SAFE_FILE_PATTERN = /^(?:index\.md|[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+)$/
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/
 const IMAGE_EMBED_PATTERN = /!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g
 const WIKI_LINK_PATTERN = /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g
+
+/**
+ * 文章目录之外笔记的 source key 前缀，和 Obsidian 插件里
+ * EXTRA_SOURCE_PREFIX 保持一致：目录内是相对路径，目录外是 ../ + vault 相对路径。
+ */
+const EXTRA_SOURCE_PREFIX = '../'
 
 export function createSlug(value: string): string {
   const transliterated = pinyin(value, {
@@ -117,6 +123,60 @@ async function listFiles(directory: string, extension?: string): Promise<string[
     })
   )
   return files.flat().sort()
+}
+
+/**
+ * 扫描文章目录之外的 vault，收集显式标记 publish: true 的笔记。
+ * 这些笔记归用户自己管：只读取、不回写，frontmatter 缺失或解析失败都跳过。
+ * 隐藏目录（.obsidian、.trash）、node_modules 和博客仓库自身不在扫描范围。
+ */
+async function listExtraSources(config: BlogSyncConfig): Promise<string[]> {
+  // 文章目录就是 vault 根目录时没有「目录外」可言，全量文件已由主扫描覆盖。
+  if (resolve(config.sourceDir) === resolve(config.vaultRoot)) return []
+  const skipDirectories = new Set([resolve(config.sourceDir), repositoryRoot])
+  const extras: string[] = []
+  await walk(config.vaultRoot)
+  return extras.sort()
+
+  async function walk(directory: string): Promise<void> {
+    let entries: Awaited<ReturnType<typeof readdir>>
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      console.warn(
+        `跳过无法读取的目录 ${relativePortable(config.vaultRoot, directory)}: ${(error as Error).message}`
+      )
+      return
+    }
+    await Promise.all(
+      entries.map(async (entry) => {
+        // 符号链接既可能指回 vault 造成死循环，也可能指向 vault 之外，一律不跟。
+        if (entry.isSymbolicLink()) return
+        const path = join(directory, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name.startsWith('.') || entry.name === 'node_modules') return
+          if (skipDirectories.has(resolve(path))) return
+          await walk(path)
+          return
+        }
+        if (!entry.isFile() || extname(entry.name).toLowerCase() !== '.md') return
+        if (await isPublishMarked(path)) extras.push(path)
+      })
+    )
+  }
+}
+
+async function isPublishMarked(path: string): Promise<boolean> {
+  const source = await readFile(path, 'utf8')
+  const match = source.match(FRONTMATTER_PATTERN)
+  if (!match) return false
+  try {
+    const data = parse(match[1]) as { publish?: unknown } | null
+    return data?.publish === true
+  } catch {
+    console.warn(`跳过无法解析 frontmatter 的笔记: ${relativePortable(config.vaultRoot, path)}`)
+    return false
+  }
 }
 
 async function readManifest(path: string): Promise<BlogSyncManifest> {
@@ -201,7 +261,8 @@ function relativePortable(from: string, to: string): string {
 
 async function initializeNote(
   path: string,
-  sourceDir: string
+  sourceDir: string,
+  options?: { writeBack: boolean; keyPrefix?: string }
 ): Promise<{
   note: SourceNote
   initialized: boolean
@@ -212,6 +273,8 @@ async function initializeNote(
   const fileStat = await stat(path)
   const createdAt = fileStat.birthtimeMs > 0 ? fileStat.birthtime : fileStat.mtime
   const data = { ...parsed.data }
+  const writeBack = options?.writeBack ?? true
+  const relativePath = `${options?.keyPrefix ?? ''}${relativePortable(sourceDir, path)}`
   let initialized = false
 
   const defaults: Frontmatter = {
@@ -221,7 +284,9 @@ async function initializeNote(
     publishDate: formatDate(createdAt),
     tags: [],
     slug: createSlug(typeof data.title === 'string' ? data.title : fileTitle),
-    draft: true,
+    // 目录内的笔记是同步时自动收编的，缺省先放进草稿箱；目录外的笔记必须手动
+    // 标记 publish: true 才会出现，缺省公开才符合「标了就要发」的预期。
+    draft: writeBack,
     language: '中文'
   }
 
@@ -232,18 +297,18 @@ async function initializeNote(
     }
   }
 
-  if (initialized) {
+  if (initialized && writeBack) {
     await writeFile(path, stringifyMarkdown(data, parsed.body))
   }
 
   const slug = typeof data.slug === 'string' ? createSlug(data.slug) : ''
-  if (!slug) throw new Error(`${relativePortable(sourceDir, path)} 无法生成有效 slug`)
+  if (!slug) throw new Error(`${relativePath} 无法生成有效 slug`)
 
   return {
     initialized,
     note: {
       absolutePath: path,
-      relativePath: relativePortable(sourceDir, path),
+      relativePath,
       body: parsed.body,
       data,
       slug
@@ -392,6 +457,7 @@ function sortedManifest(entries: Record<string, ManifestEntry>): BlogSyncManifes
 export async function syncBlog(config: BlogSyncConfig): Promise<SyncResult> {
   const previousManifest = await readManifest(config.manifestPath)
   const sourcePaths = await listFiles(config.sourceDir, '.md')
+  const extraPaths = await listExtraSources(config)
   const initialized: string[] = []
   const notes: SourceNote[] = []
 
@@ -399,6 +465,14 @@ export async function syncBlog(config: BlogSyncConfig): Promise<SyncResult> {
     const result = await initializeNote(path, config.sourceDir)
     notes.push(result.note)
     if (result.initialized) initialized.push(result.note.relativePath)
+  }
+  // 目录外的笔记只参与转换输出，模板补齐永远不回写。
+  for (const path of extraPaths) {
+    const result = await initializeNote(path, config.vaultRoot, {
+      writeBack: false,
+      keyPrefix: EXTRA_SOURCE_PREFIX
+    })
+    notes.push(result.note)
   }
 
   const publishedNotes = notes.filter((note) => note.data.publish === true)
