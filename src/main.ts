@@ -39,16 +39,25 @@ export default class BlogPublisherPlugin extends Plugin {
     this.registerView(
       BLOG_PANEL_VIEW_TYPE,
       (leaf) =>
-        new BlogPanelView(leaf, this.store, {
-          togglePreview: () => void this.togglePreview(),
-          publish: () => void this.publishBlog(),
-          openLogs: () => new BlogLogModal(this.app, this.store).open(),
-          openPath: (path) => void this.notes.openPath(path),
-          isPreviewing: () => this.runner.isPreviewing(),
-          togglePublish: (path) => void this.togglePublish(path),
-          toggleDraft: (path) => void this.toggleDraft(path),
-          copyUrl: (path, slug) => void this.copyUrl(path, slug)
-        })
+        new BlogPanelView(
+          leaf,
+          this.store,
+          {
+            togglePreview: () => void this.togglePreview(),
+            publish: () => void this.publishBlog(),
+            openLogs: () => new BlogLogModal(this.app, this.store).open(),
+            openPath: (path) => void this.notes.openPath(path),
+            isPreviewing: () => this.runner.isPreviewing(),
+            togglePublish: (path) => void this.togglePublish(path),
+            toggleDraft: (path) => void this.toggleDraft(path),
+            copyUrl: (path, slug) => void this.copyUrl(path, slug)
+          },
+          () => this.settings.collapsedGroups,
+          (groups) => {
+            this.settings.collapsedGroups = groups
+            void this.saveSettings()
+          }
+        )
     )
 
     this.addRibbonIcon('layout-panel-left', '博客面板', () => void this.openPanel()).addClass(
@@ -71,17 +80,20 @@ export default class BlogPublisherPlugin extends Plugin {
     this.addCommand({
       id: 'toggle-preview',
       name: '本地预览博客：启动或停止',
-      callback: () => void this.togglePreview()
+      callback: () => void this.togglePreview(),
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'd' }]
     })
     this.addCommand({
       id: 'publish-blog',
       name: '一键发布博客',
-      callback: () => void this.publishBlog()
+      callback: () => void this.publishBlog(),
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'p' }]
     })
     this.addCommand({
       id: 'show-logs',
       name: '查看最近任务日志',
-      callback: () => new BlogLogModal(this.app, this.store).open()
+      callback: () => new BlogLogModal(this.app, this.store).open(),
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'l' }]
     })
     this.addCommand({
       id: 'check-current-article',
@@ -183,9 +195,9 @@ export default class BlogPublisherPlugin extends Plugin {
       new Notice('正在构建并发布博客…', 5_000)
       await this.runner.publish()
 
-      // 显示操作摘要
+      // 显示操作摘要（如果构建脚本输出了结果）
       const result = this.store.getState().lastResult
-      if (result) {
+      if (result && (result.published.length > 0 || result.removed.length > 0 || result.initialized.length > 0)) {
         new SummaryModal(
           this.app,
           '✅ 发布完成',

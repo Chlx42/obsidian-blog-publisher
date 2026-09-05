@@ -48,6 +48,7 @@ export interface BlogPublisherSettings {
   commands: CommandSet
   resultLinePrefix: string
   customValidatorPath: string
+  collapsedGroups: string[]  // 折叠的分组状态码
 }
 
 export type LogLevel = 'info' | 'error'
@@ -197,7 +198,8 @@ export const DEFAULT_SETTINGS: BlogPublisherSettings = {
   customRuntimePath: '',
   commands: { ...DEFAULT_COMMANDS },
   resultLinePrefix: '__BLOG_RESULT__',
-  customValidatorPath: ''
+  customValidatorPath: '',
+  collapsedGroups: ['ready']  // 默认折叠「已发布」分组
 }
 
 /** 发布器结构化结果行的前缀，stdout 里混着构建输出，靠它挑出结果行。 */

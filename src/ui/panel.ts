@@ -27,12 +27,12 @@ export interface PanelActions {
  * 文章量在几十篇量级，整块重建的成本可以忽略，不值得引入 diff。
  */
 export class BlogPanelView extends ItemView {
-  private collapsed = new Set<string>()
-
   constructor(
     leaf: WorkspaceLeaf,
     private store: BlogStore,
-    private actions: PanelActions
+    private actions: PanelActions,
+    private getCollapsedGroups: () => string[],
+    private setCollapsedGroups: (groups: string[]) => void
   ) {
     super(leaf)
   }
@@ -156,7 +156,8 @@ export class BlogPanelView extends ItemView {
   }
 
   private renderGroup(parent: HTMLElement, group: ArticleGroup) {
-    const isCollapsed = this.collapsed.has(group.code)
+    const collapsedGroups = this.getCollapsedGroups()
+    const isCollapsed = collapsedGroups.includes(group.code)
     const wrapper = parent.createDiv({ cls: 'blog-publisher-group' })
 
     const header = wrapper.createDiv({ cls: 'blog-publisher-group-header' })
@@ -168,8 +169,10 @@ export class BlogPanelView extends ItemView {
     header.createSpan({ cls: 'blog-publisher-group-label', text: group.label })
     header.createSpan({ cls: 'blog-publisher-group-count', text: String(group.items.length) })
     header.addEventListener('click', () => {
-      if (isCollapsed) this.collapsed.delete(group.code)
-      else this.collapsed.add(group.code)
+      const updated = isCollapsed
+        ? collapsedGroups.filter(code => code !== group.code)
+        : [...collapsedGroups, group.code]
+      this.setCollapsedGroups(updated)
       this.render()
     })
 
@@ -213,14 +216,25 @@ export class BlogPanelView extends ItemView {
 
         const slug = this.store.getState().lastResult?.slugs[entry.path]
         if (slug) {
+          const state = this.store.getState()
+          const isPreviewing = this.actions.isPreviewing()
+
           const copyBtn = actions.createEl('button', {
             text: '📋',
             cls: 'blog-publisher-action-btn',
-            attr: { title: '复制博客地址' }
+            attr: { title: isPreviewing ? `复制预览地址 (${state.previewUrl}/blog/${slug})` : '复制博客地址' }
           })
           copyBtn.addEventListener('click', (e) => {
             e.stopPropagation()
-            this.actions.copyUrl(entry.path, slug)
+
+            if (isPreviewing && state.previewUrl) {
+              const previewUrl = `${state.previewUrl}/blog/${slug}`
+              navigator.clipboard.writeText(previewUrl).then(() => {
+                // Notice 会被 Obsidian 显示
+              })
+            } else {
+              this.actions.copyUrl(entry.path, slug)
+            }
           })
         }
       }
