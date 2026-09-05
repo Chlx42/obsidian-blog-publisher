@@ -311,6 +311,11 @@ __BLOG_RESULT__{"initialized":[],"published":["post1.md"],"removed":[],"slugs":{
 
 插件设置分四组，从简单到高级。大多数用户只需配置前两组。
 
+<p align="center">
+  <img src="docs/screenshot-settings.png" width="640"
+       alt="插件设置页：博客仓库路径、文章文件夹、预览端口、预览模式、保存后自动同步、状态栏显示博客状态、博客地址">
+</p>
+
 ### 基础配置
 
 | 字段 | 说明 | 默认值 |
@@ -320,6 +325,7 @@ __BLOG_RESULT__{"initialized":[],"published":["post1.md"],"removed":[],"slugs":{
 | 预览端口 | 开发服务器端口 | 4173 |
 | 预览模式 | development（草稿可见）或 production | development |
 | 保存后自动同步 | 开发预览运行时自动同步 | true |
+| 状态栏显示博客状态 | 关闭后底部状态栏不再显示「已上线/待发布」计数和当前文章状态，面板功能不受影响 | true |
 | 博客地址 | 用于复制 URL 功能 | 空 |
 
 ### 运行时配置
