@@ -153,9 +153,12 @@ interface BlogState {
 
 **订阅机制：**
 ```typescript
-// UI 组件订阅
-this.register(this.store.subscribe(() => {
-  this.renderStatusBar()
+// UI 组件订阅；回调第二参数是本次实际变更的状态键集合，
+// 用于跳过与自己无关的重绘（例如逐行到达的构建日志）。
+this.register(this.store.subscribe((_state, changed) => {
+  if (changed.has('articles') || changed.has('task')) {
+    this.renderStatusBar()
+  }
 }))
 
 // 状态更新

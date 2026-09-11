@@ -13,6 +13,15 @@ import {
 
 export const BLOG_PANEL_VIEW_TYPE = 'blog-publisher-panel'
 
+/** 面板关心的状态切片；日志行不属于其中，构建输出再多也不重绘列表。 */
+const PANEL_RELEVANT_KEYS: ReadonlySet<string> = new Set([
+  'task',
+  'lastResult',
+  'articles',
+  'previewUrl',
+  'lastFailedOperation'
+])
+
 /** 列表里展示短名，不带目录和 .md 后缀。 */
 function displayNameOf(path: string): string {
   const basename = path.split('/').pop() || path
@@ -31,8 +40,10 @@ export interface PanelActions {
 }
 
 /**
- * 侧边面板。三个区域全部由一次 store.subscribe 驱动重绘：
- * 文章量在几十篇量级，整块重建的成本可以忽略，不值得引入 diff。
+ * 侧边面板。三个区域由一次 store.subscribe 驱动重绘：
+ * 文章量在几十篇量级，整块重建的成本可以忽略，不值得引入 diff；
+ * 但要按变更键过滤——任务运行时每行日志都会 patch 一次 store，
+ * 日志不改变面板关心的任何状态，逐行重建整块 DOM 才是真正的开销。
  */
 export class BlogPanelView extends ItemView {
   constructor(
@@ -59,7 +70,16 @@ export class BlogPanelView extends ItemView {
 
   protected async onOpen() {
     this.contentEl.addClass('blog-publisher-panel')
-    this.register(this.store.subscribe(() => this.render()))
+    this.register(
+      this.store.subscribe((state, changed) => {
+        for (const key of changed) {
+          if (PANEL_RELEVANT_KEYS.has(key)) {
+            this.render()
+            return
+          }
+        }
+      })
+    )
     this.render()
   }
 

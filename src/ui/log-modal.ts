@@ -8,6 +8,12 @@ export class BlogLogModal extends Modal {
   private logContainer!: HTMLElement
   private errorToggle!: HTMLButtonElement
   private unsubscribe: (() => void) | null = null
+  /** 增量渲染的进度标记：已渲染条数、首条引用（检测日志窗口滑动）、末组指针。 */
+  private renderedLogCount = 0
+  private firstRenderedLog: LogEntry | null = null
+  private lastStage: BlogRunnerState | null = null
+  private lastGroup: HTMLElement | null = null
+  private renderedAllLogs = false
 
   constructor(
     app: App,
@@ -48,8 +54,10 @@ export class BlogLogModal extends Modal {
 
     this.logContainer = this.contentEl.createDiv({ cls: 'blog-publisher-log' })
     this.renderLogs()
-    // 弹窗开着时任务还在跑，日志要跟着涨。
-    this.unsubscribe = this.store.subscribe(() => this.renderLogs())
+    // 弹窗开着时任务还在跑，日志要跟着涨；其它键（task 等）不影响列表内容。
+    this.unsubscribe = this.store.subscribe((_state, changed) => {
+      if (changed.has('logs')) this.renderLogs()
+    })
   }
 
   onClose() {
@@ -70,13 +78,52 @@ export class BlogLogModal extends Modal {
 
   /** 按阶段分组，让「同步失败」和「构建失败」一眼能分开。 */
   private renderLogs() {
+    const logs = this.store.getState().logs
+
+    // 构建输出按块到达，逐条追加即可；整块重建留给窗口滑动、清空和过滤切换。
+    const canAppend =
+      !this.errorsOnly &&
+      this.renderedAllLogs &&
+      this.renderedLogCount > 0 &&
+      logs.length >= this.renderedLogCount &&
+      logs[logs.length - this.renderedLogCount] === this.firstRenderedLog
+    if (canAppend) {
+      for (let i = this.renderedLogCount; i < logs.length; i += 1) this.appendLogEntry(logs[i])
+      this.renderedLogCount = logs.length
+      return
+    }
+
+    this.renderLogsFull(logs)
+  }
+
+  private appendLogEntry(entry: LogEntry) {
+    if (entry.stage !== this.lastStage || !this.lastGroup) {
+      this.logContainer.createDiv({
+        cls: 'blog-publisher-log-stage',
+        text: STATE_LABELS[entry.stage]
+      })
+      this.lastStage = entry.stage
+      this.lastGroup = this.logContainer.createEl('pre', { cls: 'blog-publisher-log-lines' })
+    }
+    this.lastGroup.createDiv({
+      cls: `blog-publisher-log-line is-${entry.level}`,
+      text: entry.text
+    })
+  }
+
+  private renderLogsFull(logs: LogEntry[]) {
     this.logContainer.empty()
+    this.renderedLogCount = logs.length
+    this.firstRenderedLog = logs[0] ?? null
+    this.lastStage = null
+    this.lastGroup = null
+    this.renderedAllLogs = !this.errorsOnly
 
     if (this.error) {
       this.logContainer.createDiv({ cls: 'blog-publisher-log-error-summary', text: this.error })
     }
 
-    const entries = this.visibleEntries()
+    const entries = this.errorsOnly ? logs.filter((entry) => entry.level === 'error') : logs
     if (!entries.length) {
       this.logContainer.createDiv({
         cls: 'blog-publisher-log-empty',
@@ -85,21 +132,6 @@ export class BlogLogModal extends Modal {
       return
     }
 
-    let currentStage: BlogRunnerState | null = null
-    let group: HTMLElement | null = null
-    for (const entry of entries) {
-      if (entry.stage !== currentStage || !group) {
-        currentStage = entry.stage
-        this.logContainer.createDiv({
-          cls: 'blog-publisher-log-stage',
-          text: STATE_LABELS[entry.stage]
-        })
-        group = this.logContainer.createEl('pre', { cls: 'blog-publisher-log-lines' })
-      }
-      group.createDiv({
-        cls: `blog-publisher-log-line is-${entry.level}`,
-        text: entry.text
-      })
-    }
+    for (const entry of entries) this.appendLogEntry(entry)
   }
 }

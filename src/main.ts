@@ -25,6 +25,16 @@ import {
 import { VaultNotes } from './vault-notes'
 
 const AUTO_SYNC_DEBOUNCE_MS = 800
+/** 文件事件（增删改）的索引重建防抖：批量同步/导入时事件成串到达，全量重建只需做一次。 */
+const REFRESH_DEBOUNCE_MS = 250
+
+/** 状态栏关心的状态切片；逐行日志不影响它的任何显示，直接跳过。 */
+const STATUS_RELEVANT_KEYS: ReadonlySet<string> = new Set([
+  'task',
+  'articles',
+  'lastResult',
+  'previewUrl'
+])
 
 export default class BlogPublisherPlugin extends Plugin {
   settings: BlogPublisherSettings = DEFAULT_SETTINGS
@@ -35,6 +45,7 @@ export default class BlogPublisherPlugin extends Plugin {
   private notes!: VaultNotes
   private statusBar!: StatusBar
   private autoSyncTimer: number | null = null
+  private refreshTimer: number | null = null
   private validator: Validator | null = null
 
   async onload() {
@@ -83,7 +94,16 @@ export default class BlogPublisherPlugin extends Plugin {
       () => void this.openPanel(),
       () => void this.joinCurrentNote()
     )
-    this.register(this.store.subscribe(() => this.renderStatusBar()))
+    this.register(
+      this.store.subscribe((_state, changed) => {
+        for (const key of changed) {
+          if (STATUS_RELEVANT_KEYS.has(key)) {
+            this.renderStatusBar()
+            return
+          }
+        }
+      })
+    )
 
     this.addCommand({
       id: 'open-panel',
@@ -129,10 +149,11 @@ export default class BlogPublisherPlugin extends Plugin {
       hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'i' }]
     })
 
-    this.registerEvent(this.app.workspace.on('file-open', () => this.refreshArticles()))
+    // 切换笔记只影响状态栏的「当前文章」，索引内容不变，不必全量重建。
+    this.registerEvent(this.app.workspace.on('file-open', () => this.renderStatusBar()))
     this.registerEvent(
       this.app.metadataCache.on('changed', (file) => {
-        if (this.notes.isBlogNote(file)) this.refreshArticles()
+        if (this.notes.isBlogNote(file)) this.scheduleRefresh()
       })
     )
     this.registerEvent(
@@ -141,10 +162,10 @@ export default class BlogPublisherPlugin extends Plugin {
         this.scheduleAutoSync()
       })
     )
-    // 增删文件也要更新列表。
-    this.registerEvent(this.app.vault.on('create', () => this.refreshArticles()))
-    this.registerEvent(this.app.vault.on('delete', () => this.refreshArticles()))
-    this.registerEvent(this.app.vault.on('rename', () => this.refreshArticles()))
+    // 增删文件也要更新列表；批量操作（同步盘、导入）会成串触发，防抖合并成一次重建。
+    this.registerEvent(this.app.vault.on('create', () => this.scheduleRefresh()))
+    this.registerEvent(this.app.vault.on('delete', () => this.scheduleRefresh()))
+    this.registerEvent(this.app.vault.on('rename', () => this.scheduleRefresh()))
 
     this.addSettingTab(new BlogPublisherSettingTab(this.app, this))
     this.app.workspace.onLayoutReady(() => this.refreshArticles())
@@ -152,6 +173,7 @@ export default class BlogPublisherPlugin extends Plugin {
 
   async onunload() {
     if (this.autoSyncTimer !== null) window.clearTimeout(this.autoSyncTimer)
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer)
     await this.runner?.stopPreview()
   }
 
@@ -327,6 +349,15 @@ export default class BlogPublisherPlugin extends Plugin {
 
   private refreshArticles() {
     this.store.setArticles(this.notes.buildIndex(this.publishRecord?.sources ?? null))
+  }
+
+  /** 文件事件驱动的刷新走这里：短时间内的成串事件合并成最后一次全量重建。 */
+  private scheduleRefresh() {
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer)
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null
+      this.refreshArticles()
+    }, REFRESH_DEBOUNCE_MS)
   }
 
   private renderStatusBar() {

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- **日志输出不再拖累面板与状态栏** - store 的订阅回调现在携带本次实际变更的状态键：
+  构建输出的每一行日志只影响日志弹窗（且改为逐条追加，不再整块重建），
+  面板和状态栏按变更键过滤，无关的 patch 不再触发 DOM 重建。
+- **文件事件防抖合并索引重建** - 批量同步/导入笔记时 `create`/`delete`/`rename`/
+  metadataCache 变更事件成串到达，现在合并为 250ms 内的最后一次全量重建；
+  切换笔记（file-open）只刷新状态栏的当前文章显示，不再重建整个索引。
+- **中文标题排序改用复用的 `Intl.Collator`**，替代每次比较都走完整 ICU 路径的
+  `localeCompare(x, 'zh-CN')`。
+- **设置页文本输入防抖保存** - 停止输入 600ms 后才写 `data.json`、重新加载校验器
+  和重建索引；「博客仓库路径」「文章文件夹」的重绘只在框架识别或文章数真正
+  变化时发生，输入过程不再每个按键扫描文件系统。
+
 ### Added
 - **发布网络重试** - 发布器的 `git fetch` / `git push` 遇到代理链路抖动
   （`Connection closed by 198.18.x.x`、`SSL_ERROR_SYSCALL`）时自动重试两次，

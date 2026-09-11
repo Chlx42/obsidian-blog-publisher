@@ -10,9 +10,14 @@ import type {
 
 export const MAX_LOG_LINES = 300
 
+export type BlogStateKey = keyof BlogState
+
 /**
  * 可订阅的状态仓库。面板、状态栏、日志弹窗各自 subscribe，互不知道对方存在，
  * 这样加一个新的 UI 消费者不需要改任何已有代码。
+ *
+ * 回调第二参数是本次 patch 实际变化的键集合：构建输出的每一行日志都会
+ * patch 一次，订阅方据此跳过与自己无关的重绘，日志风暴不再拖垮整个 UI。
  */
 export class BlogStore {
   private state: BlogState = {
@@ -23,14 +28,14 @@ export class BlogStore {
     previewUrl: null,
     lastFailedOperation: null
   }
-  private listeners = new Set<(state: BlogState) => void>()
+  private listeners = new Set<(state: BlogState, changed: ReadonlySet<BlogStateKey>) => void>()
 
   getState(): BlogState {
     return this.state
   }
 
   /** 返回退订函数，交给 Obsidian 的 register() 管理生命周期。 */
-  subscribe(listener: (state: BlogState) => void): () => void {
+  subscribe(listener: (state: BlogState, changed: ReadonlySet<BlogStateKey>) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
@@ -67,7 +72,13 @@ export class BlogStore {
   }
 
   private patch(partial: Partial<BlogState>) {
+    const changed = new Set<BlogStateKey>()
+    for (const key of Object.keys(partial) as BlogStateKey[]) {
+      // 值相同的 patch（比如重复 setTask('idle')）不值得惊动所有订阅者。
+      if (this.state[key] !== partial[key]) changed.add(key)
+    }
+    if (!changed.size) return
     this.state = { ...this.state, ...partial }
-    for (const listener of [...this.listeners]) listener(this.state)
+    for (const listener of [...this.listeners]) listener(this.state, changed)
   }
 }

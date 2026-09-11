@@ -12,6 +12,21 @@ export interface SettingsHost extends Plugin {
   articleCount(): number
 }
 
+/**
+ * 文本输入框每个按键都会触发一次 onChange；把写盘、文件系统探测和重绘
+ * 合并到停止输入之后，输入路径时不再每个按键写一次 data.json。
+ */
+function debounce(fn: () => void, waitMs: number): () => void {
+  let timer: number | null = null
+  return () => {
+    if (timer !== null) window.clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      timer = null
+      fn()
+    }, waitMs)
+  }
+}
+
 export class BlogPublisherSettingTab extends PluginSettingTab {
   constructor(
     app: App,
@@ -27,6 +42,25 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
 
     // 基础配置
     const detectedFramework = detectFrameworkAt(this.host.settings.blogRepository)
+    const frameworkAtRender = detectedFramework?.id ?? null
+    const articleCountAtRender = this.host.articleCount()
+    const debouncedSave = debounce(() => void this.host.saveSettings(), 600)
+    // 路径识别要扫描文件系统、重绘会打断输入；只在框架真正变化时才重建整页。
+    const debouncedCommitPath = debounce(() => {
+      void this.host.saveSettings()
+      if (
+        (detectFrameworkAt(this.host.settings.blogRepository)?.id ?? null) !== frameworkAtRender
+      ) {
+        this.display()
+      }
+    }, 600)
+    // 文章数提示依赖保存后的重新索引，数量变了才值得重绘。
+    const debouncedCommitFolder = debounce(() => {
+      void this.host.saveSettings().then(() => {
+        if (this.host.articleCount() !== articleCountAtRender) this.display()
+      })
+    }, 600)
+
     new Setting(containerEl)
       .setName('博客仓库路径')
       .setDesc(
@@ -38,11 +72,9 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
         text
           .setPlaceholder('/path/to/blog')
           .setValue(this.host.settings.blogRepository)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.host.settings.blogRepository = value.trim()
-            await this.host.saveSettings()
-            // 路径变了，框架提示和「一键配置」的可用性都要跟着变。
-            this.display()
+            debouncedCommitPath()
           })
       )
 
@@ -77,19 +109,18 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
         `相对于当前 Vault 的博客笔记目录，目录外的笔记标记 publish: true 也会被识别，当前识别到 ${this.host.articleCount()} 篇`
       )
       .addText((text) =>
-        text.setValue(this.host.settings.articlesFolder).onChange(async (value) => {
+        text.setValue(this.host.settings.articlesFolder).onChange((value) => {
           this.host.settings.articlesFolder = value.trim().replace(/^\/+|\/+$/g, '')
-          await this.host.saveSettings()
-          this.display()
+          debouncedCommitFolder()
         })
       )
 
     new Setting(containerEl).setName('预览端口').addText((text) =>
-      text.setValue(String(this.host.settings.previewPort)).onChange(async (value) => {
+      text.setValue(String(this.host.settings.previewPort)).onChange((value) => {
         const port = Number(value)
         if (Number.isInteger(port) && port > 0 && port <= 65_535) {
           this.host.settings.previewPort = port
-          await this.host.saveSettings()
+          debouncedSave()
         }
       })
     )
@@ -136,9 +167,9 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
         text
           .setPlaceholder('https://example.com')
           .setValue(this.host.settings.siteUrl)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.host.settings.siteUrl = value.trim()
-            await this.host.saveSettings()
+            debouncedSave()
           })
       )
 
@@ -183,9 +214,9 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
           text
             .setPlaceholder('/usr/local/bin/bun')
             .setValue(this.host.settings.customRuntimePath)
-            .onChange(async (value) => {
+            .onChange((value) => {
               this.host.settings.customRuntimePath = value.trim()
-              await this.host.saveSettings()
+              debouncedSave()
             })
         )
     }
@@ -213,9 +244,9 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
         text
           .setPlaceholder(DEFAULT_COMMANDS[key].join(' '))
           .setValue(this.host.settings.commands[key].join(' '))
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.host.settings.commands[key] = value.trim().split(/\s+/).filter(Boolean)
-            await this.host.saveSettings()
+            debouncedSave()
           })
       )
     }
@@ -238,9 +269,9 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
         text
           .setPlaceholder('__BLOG_RESULT__')
           .setValue(this.host.settings.resultLinePrefix)
-          .onChange(async (value) => {
+          .onChange((value) => {
             this.host.settings.resultLinePrefix = value.trim()
-            await this.host.saveSettings()
+            debouncedSave()
           })
       )
 
@@ -249,6 +280,7 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
       .setDesc('可选。指向导出 collectArticleIssues 的 JS 文件，留空则只检查 publish 字段')
 
     // 路径填错时校验会静默跳过，所有文章都显示「可发布」。把失败原因摆出来。
+    // require() 是同步 IO，跟着按键走太贵，合并到停止输入之后。
     const validatorStatus = advanced.createDiv({ cls: 'blog-publisher-validator-status' })
     const renderValidatorStatus = () => {
       const { error } = loadValidatorResult(this.host.settings.customValidatorPath)
@@ -262,15 +294,18 @@ export class BlogPublisherSettingTab extends PluginSettingTab {
         validatorStatus.setText('校验器已加载。')
       }
     }
+    const debouncedValidatorCommit = debounce(() => {
+      void this.host.saveSettings()
+      renderValidatorStatus()
+    }, 600)
 
     validatorSetting.addText((text) =>
       text
         .setPlaceholder('/path/to/validator.js')
         .setValue(this.host.settings.customValidatorPath)
-        .onChange(async (value) => {
+        .onChange((value) => {
           this.host.settings.customValidatorPath = value.trim()
-          await this.host.saveSettings()
-          renderValidatorStatus()
+          debouncedValidatorCommit()
         })
     )
     renderValidatorStatus()

@@ -27,6 +27,9 @@ const GROUP_LABELS: Record<ArticleStatusCode, string> = {
   uninitialized: '缺 frontmatter'
 }
 
+// 每次比较都调 localeCompare(x, 'zh-CN') 会反复走 ICU 查找；复用 Collator 快一个量级。
+const TITLE_COLLATOR = new Intl.Collator('zh-CN')
+
 function titleOf(note: VaultNote): string {
   const title = note.frontmatter?.title
   return typeof title === 'string' && title.trim() ? title.trim() : note.basename
@@ -62,7 +65,7 @@ export function buildArticleIndex(
   for (const code of GROUP_ORDER) {
     const items = entries
       .filter((entry) => entry.status.code === code)
-      .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+      .sort((a, b) => TITLE_COLLATOR.compare(a.title, b.title))
     // 空分组不占地方。
     if (items.length) groups.push({ code, label: GROUP_LABELS[code], items })
   }

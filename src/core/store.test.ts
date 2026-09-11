@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { BlogStore, MAX_LOG_LINES } from './store'
+import { BlogStore, MAX_LOG_LINES, type BlogStateKey } from './store'
 
 describe('BlogStore', () => {
   test('多个订阅者都收到通知', () => {
@@ -27,6 +27,28 @@ describe('BlogStore', () => {
     store.setTask('idle')
 
     expect(calls).toBe(1)
+  })
+
+  test('相同值的 patch 不触发通知', () => {
+    const store = new BlogStore()
+    let calls = 0
+    store.subscribe(() => (calls += 1))
+
+    store.setTask('idle')
+
+    expect(calls).toBe(0)
+  })
+
+  test('回调收到实际变更的键集合', () => {
+    const store = new BlogStore()
+    const changedKeysList: Array<ReadonlySet<BlogStateKey>> = []
+    store.subscribe((_state, changed) => {
+      changedKeysList.push(changed)
+    })
+
+    store.appendLog('一行日志', 'info')
+
+    expect(changedKeysList).toEqual([new Set(['logs'])])
   })
 
   test('日志带上产生时的阶段', () => {
