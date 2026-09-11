@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 import { DEFAULT_COMMANDS, DEFAULT_SETTINGS, type BlogPublisherSettings } from './src/types'
 
-const pluginId = 'blog-publisher'
+const pluginId = 'obsidian-blog-publisher'
 const pluginSourceDirectory = dirname(fileURLToPath(import.meta.url))
 
 const vaultRoot = process.env.BLOG_VAULT_ROOT?.trim()
